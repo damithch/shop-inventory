@@ -25,11 +25,12 @@ after(async () => {
   await db.pool.end();
 });
 
-test('reads Excel rows and plain lines', () => {
+test('reads Excel rows, WhatsApp messages and plain lines', () => {
   const text = [
     'Item\tQty\tPrice',
     'DIOR SAUVAGE\t2\t25000',
-    '3. LATTAFA ASAD 4 pcs',
+    'ARMAF CLUB   2   18500',
+    '[06/10/2026, 9:15 am] Nimal: 3. LATTAFA ASAD 4 pcs',
     'AFNAN 9AM - 2',
     'RASASI MAX x 3',
     '* YARA x 3',
@@ -40,10 +41,10 @@ test('reads Excel rows and plain lines', () => {
   ].join('\n');
   const { rows, skipped } = parsePaste(text);
   assert.deepEqual(rows.map((r) => [r.name, r.quantity]), [
-    ['DIOR SAUVAGE', 2], ['LATTAFA ASAD', 4], ['AFNAN 9AM', 2], ['RASASI MAX', 3], ['YARA', 3], ['CLUB DE NUIT', 2],
+    ['DIOR SAUVAGE', 2], ['ARMAF CLUB', 2], ['LATTAFA ASAD', 4], ['AFNAN 9AM', 2], ['RASASI MAX', 3], ['YARA', 3], ['CLUB DE NUIT', 2],
   ]);
   assert.deepEqual(skipped.map((s) => [s.line, s.reason]), [
-    [1, 'looks like a heading'], [8, 'no quantity on this line'], [9, 'totals row'], [10, 'quantity is 0'],
+    [1, 'looks like a heading'], [9, 'no quantity on this line'], [10, 'totals row'], [11, 'quantity is 0'],
   ]);
 });
 

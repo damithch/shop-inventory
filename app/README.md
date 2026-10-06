@@ -21,7 +21,8 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
   change (new items, sold, received, rows that can't be used, new items that
   look like existing ones), and saves it on **Save**. Upload the shop's count
   each evening: drops since the last count are recorded as sales. Past uploads
-  are under the history button. **Add list** > **Paste list** takes rows copied from Excel: choose Purchase (stock added at Home), Transfer (from Home to
+  are under the history button. **Add list** > **Paste list** takes a list copied from Excel
+  or WhatsApp: choose Purchase (stock added at Home), Transfer (from Home to
   a shop) or Sale (at a shop), paste, check the preview, then **Save**.
 - **Settings**: the default alert level (3 to start), alert history, sign out.
 

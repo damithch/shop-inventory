@@ -52,7 +52,7 @@ class _SalesScreenState extends State<SalesScreen> {
             ListTile(
               leading: const Icon(Icons.content_paste),
               title: const Text('Paste list'),
-              subtitle: const Text('Purchases, transfers or sales copied from Excel'),
+              subtitle: const Text('Purchases, transfers or sales copied from Excel or WhatsApp'),
               onTap: () => Navigator.pop(context, const PasteScreen()),
             ),
             ListTile(
