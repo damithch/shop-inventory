@@ -15,6 +15,13 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
   alert level for that item there (or go back to the default).
 - **Low stock**: everything at or below its alert level, with a one-tap refill from
   the main shop (or add stock, for the main shop itself).
+- **Sales**: what sold on a day, per item and location, with arrows and a date
+  picker to change the day. **Upload stock sheet** picks an Excel (.xlsx) or
+  CSV stock count from the phone and the location it's for, shows what would
+  change (new items, sold, received, rows that can't be used, new items that
+  look like existing ones), and saves it on **Save**. Upload the shop's count
+  each evening: drops since the last count are recorded as sales. Past uploads
+  are under the history button.
 - **Settings**: the default alert level (3 to start), alert history, sign out.
 
 When a stock change takes something down to its alert level, the app shows a

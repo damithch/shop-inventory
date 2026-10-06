@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shop_inventory/api/api_client.dart';
 import 'package:shop_inventory/main.dart';
 import 'package:shop_inventory/push.dart';
+import 'package:shop_inventory/screens/upload_screen.dart';
 import 'package:shop_inventory/session.dart';
 
 import 'fake_backend.dart';
@@ -167,6 +169,35 @@ void main() {
     await tester.tap(find.text('Low stock').last);
     await tester.pumpAndSettle();
     expect(find.text('Kandy · alert at 3'), findsOneWidget);
+  });
+
+  testWidgets('uploads an end-of-day sheet and shows what sold', (tester) async {
+    pickSheet = () async => PickedSheet('evening.csv', utf8.encode('Item,Qty\nRice 5kg,5\nRice,7\n'));
+    await pumpApp(tester);
+    await signIn(tester, 'secret');
+    await tester.tap(find.text('Sales'));
+    await tester.pumpAndSettle();
+    expect(find.text('0 items sold'), findsOneWidget);
+
+    await tester.tap(find.text('Upload stock sheet'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Choose file'));
+    await tester.pumpAndSettle();
+
+    // Preview: Rice 5kg went from 8 to 5, and "Rice" is new but looks like Rice 5kg.
+    expect(find.text('3 sold'), findsOneWidget);
+    expect(find.text('1 new items (7 in stock)'), findsOneWidget);
+    expect(find.textContaining('1 new items look like items already in the app'), findsOneWidget);
+    expect(backend.stock['10:1'], 8);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(backend.stock['10:1'], 5);
+    expect(backend.uploads.single['filename'], 'evening.csv');
+
+    // Back on the sales screen, reloaded.
+    expect(find.text('3 items sold'), findsOneWidget);
+    expect(find.text('3 bag'), findsOneWidget);
   });
 
   testWidgets('changes the default alert level', (tester) async {

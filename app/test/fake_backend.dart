@@ -27,6 +27,10 @@ class FakeBackend {
   /// Push tokens registered with POST /devices.
   final devices = <String>{};
 
+  /// Sales for GET /reports/sales: item, location and quantity.
+  final sales = <({int item, int loc, int qty})>[];
+  final uploads = <Map<String, dynamic>>[];
+
   http.Client get client => MockClient(_handle);
 
   int _qty(int item, int loc) => stock['$item:$loc'] ?? 0;
@@ -62,7 +66,8 @@ class FakeBackend {
   Future<http.Response> _handle(http.Request req) async {
     final path = req.url.path;
     requests.add('${req.method} $path');
-    final body = req.body.isEmpty ? <String, dynamic>{} : jsonDecode(req.body) as Map<String, dynamic>;
+    final isJson = req.headers['Content-Type']?.startsWith('application/json') ?? false;
+    final body = !isJson || req.body.isEmpty ? <String, dynamic>{} : jsonDecode(req.body) as Map<String, dynamic>;
 
     if (req.method == 'POST' && path == '/auth/login') {
       return body['password'] == password
@@ -168,6 +173,7 @@ class FakeBackend {
       final qty = body['quantity'] as int;
       if (_qty(item, loc) < qty) return _error(409, 'Not enough "${_item(item)['name']}" at ${_loc(loc)['name']}');
       final alert = _change(item, loc, -qty);
+      sales.add((item: item, loc: loc, qty: qty));
       return _json({
         'movement': {},
         'levels': [],
@@ -194,6 +200,27 @@ class FakeBackend {
             }(),
       ]);
     }
+    if (req.method == 'POST' && (path == '/uploads/preview' || path == '/uploads')) {
+      return _upload(req, save: path == '/uploads');
+    }
+    if (req.method == 'GET' && path == '/uploads') return _json(uploads.reversed.toList());
+    if (req.method == 'GET' && path == '/reports/sales') {
+      return _json({
+        'date': req.url.queryParameters['date'] ?? '2026-10-06',
+        'total': sales.fold<int>(0, (t, s) => t + s.qty),
+        'items': [
+          for (final s in sales)
+            {
+              'item_id': s.item,
+              'item_name': _item(s.item)['name'],
+              'unit': _item(s.item)['unit'],
+              'location_id': s.loc,
+              'location_name': _loc(s.loc)['name'],
+              'quantity': s.qty,
+            },
+        ],
+      });
+    }
     if (req.method == 'GET' && path == '/settings') return _json({'default_threshold': defaultThreshold});
     if (req.method == 'PUT' && path == '/settings') {
       defaultThreshold = body['default_threshold'] as int;
@@ -208,5 +235,93 @@ class FakeBackend {
       return http.Response('', 204);
     }
     return _error(404, 'Not found');
+  }
+
+  /// A stock sheet as CSV lines of "name,count" under a header row.
+  http.Response _upload(http.Request req, {required bool save}) {
+    final loc = int.tryParse(req.url.queryParameters['location_id'] ?? '') ?? 1;
+    final rows = const LineSplitter().convert(utf8.decode(req.bodyBytes)).skip(1).map((l) => l.split(','));
+    final newItems = <Map<String, dynamic>>[];
+    final changes = <Map<String, dynamic>>[];
+    var unchanged = 0;
+    var sold = 0;
+    var received = 0;
+    for (final [name, count] in rows) {
+      final qty = int.parse(count);
+      final existing = items.where((i) => i['name'] == name).firstOrNull;
+      if (existing == null) {
+        newItems.add({
+          'row': 2,
+          'name': name,
+          'sku': null,
+          'unit': 'pcs',
+          'similar_to': [
+            for (final i in items)
+              if ((i['name'] as String).contains(name)) i['name'],
+          ],
+          'stock': [
+            {'location_id': loc, 'location_name': _loc(loc)['name'], 'quantity': qty},
+          ],
+        });
+        received += qty;
+        if (save) {
+          items.add({'id': 10 + items.length, 'name': name, 'sku': null, 'unit': 'pcs'});
+          _change(items.last['id'] as int, loc, qty);
+        }
+        continue;
+      }
+      final id = existing['id'] as int;
+      final from = _qty(id, loc);
+      if (from == qty) {
+        unchanged++;
+        continue;
+      }
+      changes.add({
+        'row': 2,
+        'item_id': id,
+        'item_name': name,
+        'location_id': loc,
+        'location_name': _loc(loc)['name'],
+        'from': from,
+        'to': qty,
+      });
+      if (qty < from) {
+        sold += from - qty;
+        if (save) sales.add((item: id, loc: loc, qty: from - qty));
+      } else {
+        received += qty - from;
+      }
+      if (save) _change(id, loc, qty - from);
+    }
+    final summary = {
+      'new_items': newItems.length,
+      'new_stock': newItems.fold<int>(0, (t, i) => t + ((i['stock'] as List).first['quantity'] as int)),
+      'changed_items': changes.length,
+      'sold': sold,
+      'received': received,
+      'unchanged_items': unchanged,
+      'skipped_rows': 0,
+    };
+    final filename = req.url.queryParameters['filename'];
+    if (save) {
+      final upload = {'id': uploads.length + 1, 'filename': filename, 'summary': summary, 'alerts': <Object>[]};
+      uploads.add(upload);
+      return _json(upload, 201);
+    }
+    return _json({
+      'filename': filename,
+      'notes': <String>[],
+      'header_row': 1,
+      'columns': {
+        'stock': [
+          {'header': 'Qty', 'location_id': loc, 'location_name': _loc(loc)['name']},
+        ],
+        'ignored': <String>[],
+      },
+      'summary': summary,
+      'new_items': newItems,
+      'changes': changes,
+      'skipped': <Object>[],
+    });
   }
 }
