@@ -60,12 +60,93 @@ All endpoints except `/health` and `/auth/login` need `Authorization: Bearer <to
 | POST | `/devices` | `{ token, platform? }` | Registers a phone's FCM token |
 | DELETE | `/devices/:token` | | |
 | GET | `/alerts` | `?limit=&before_id=` | Alert history, newest first |
+| POST | `/uploads/preview` | file as the body, `?filename=&location_id=` | What a stock sheet would change; saves nothing |
+| POST | `/uploads` | same | Saves the stock sheet (see below) |
+| GET | `/uploads` | `?limit=` | Past uploads with their summary |
+| GET | `/reports/sales` | `?date=YYYY-MM-DD&location_id=` | What sold that day (default today), per item and location |
 
 Stock endpoints return `{ movement, levels, alerts }` so the app can update its
 screen and show any alert straight away.
 
 Errors are `{ "error": "message" }` with a 400, 401, 404 or 409 status. The
 messages are written to be shown to the user as they are.
+
+## Stock sheets uploaded from the app
+
+The app can upload a stock sheet (`.xlsx` or `.csv`), for example the shop's
+stock list each morning and again at the end of the day. Send the file as the
+raw request body (`Content-Type: application/octet-stream`) with its name in
+`?filename=`. `/uploads/preview` shows what would change; `/uploads` saves it.
+
+- Columns are read the same way as the import script below. A plain quantity
+  column (Qty, Stock, ...) is the stock at `location_id`, or the main shop if
+  that isn't given. A sheet with no header row works too when it's just names
+  and counts.
+- Items not in the app yet are created, with their count as stock received.
+- For items already in the app, the count in the sheet becomes the stock at
+  that location. A lower count than the app has is recorded as a **sale**, a
+  higher one as stock **received**. Each movement has `upload_id` set, and
+  the note "Stock sheet <file name>".
+- Items missing from the sheet, and blank quantity cells, leave stock as it is.
+- Names match ignoring case, spaces and punctuation. New items whose name is
+  part of an existing one (or the other way round) are listed with
+  `similar_to`, so the app can warn before a short name becomes a duplicate.
+- Rows that can't be used (no name, negative or fractional count, totals row,
+  duplicate) are listed in `skipped` and change nothing.
+- Sales that take an item to its alert level send the usual low-stock alert.
+
+`/reports/sales` adds up sales on one day in the shop's time zone
+(`SHOP_TIMEZONE`, default `Asia/Colombo`), from both stock sheets and sales
+entered in the app.
+
+## Importing items from a file
+
+`scripts/import-items.js` adds items, and optionally their starting stock,
+from a `.csv` or `.xlsx` file. Starting stock goes in as `receive` movements
+(note "Imported from <file>"), the same as receiving stock in the app.
+
+Templates to send the client: `templates/items-template.xlsx` and
+`templates/items-template.csv`.
+
+| Column | Required | Also recognised as |
+|---|---|---|
+| Item name | yes | Name, Item, Product, Description, Particulars |
+| SKU | no | Code, Item code, Barcode, Part no |
+| Unit | no, default `pcs` | Units, UOM |
+| Qty | no | Quantity, Stock, Opening stock, On hand, Balance (main shop) |
+| `<location name>` | no | Stock at that location, e.g. `Kandy Branch` or `Kandy Branch Qty` |
+
+Header matching ignores case, spaces and punctuation, and title rows above the
+header are skipped. Location columns must match a location that already exists
+in the app, so add the branches first.
+
+Run it from `backend/` with a `.env` whose `DATABASE_URL` is the database to
+import into (the Supabase Session pooler string for the live app):
+
+```sh
+node --env-file=.env scripts/import-items.js items.xlsx           # preview only
+node --env-file=.env scripts/import-items.js items.xlsx --apply   # import
+```
+
+The preview shows which column was read as what, columns that are not
+imported, the new items, and every skipped row with the reason. Rows are
+skipped when they have no name, a quantity that isn't a whole number of 0 or
+more, or an item that is already in the app (same SKU, or same name when there
+is no SKU) or earlier in the file. That makes running the same file twice
+safe. `--apply` refuses to run while any column would be left out, because
+that is usually stock for a location that hasn't been added yet; once you're
+sure a column isn't needed, pass `--map "<header>=ignore"`. The import is all or nothing: if anything fails while saving, nothing is
+saved.
+
+If a column isn't recognised, say what it is with `--map`, as often as needed:
+
+```sh
+node --env-file=.env scripts/import-items.js items.xlsx \
+  --map "Prod Desc=name" --map "Bal=stock" --map "Shop 2=stock:Kandy Branch" --map "Notes=ignore"
+```
+
+Use `--sheet "Sheet name"` to read a sheet other than the first. Old `.xls`
+files need saving as `.xlsx` or `.csv` first.
 
 ## Run locally
 

@@ -45,13 +45,22 @@ class ApiClient {
     return Uri.parse('$base$path').replace(queryParameters: (q == null || q.isEmpty) ? null : q);
   }
 
-  Future<dynamic> _send(String method, String path, {Object? body, Map<String, String?>? query}) async {
+  Future<dynamic> _send(
+    String method,
+    String path, {
+    Object? body,
+    List<int>? bytes,
+    Map<String, String?>? query,
+  }) async {
     final request = http.Request(method, _uri(path, query));
     request.headers['Accept'] = 'application/json';
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     if (body != null) {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
+    } else if (bytes != null) {
+      request.headers['Content-Type'] = 'application/octet-stream';
+      request.bodyBytes = bytes;
     }
 
     http.Response response;
@@ -224,6 +233,42 @@ class ApiClient {
   Future<List<AlertRecord>> alerts({int limit = 50}) async {
     final res = await _send('GET', '/alerts', query: {'limit': '$limit'}) as List;
     return res.map((e) => AlertRecord.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  // Stock sheets and sales
+
+  /// What uploading this stock sheet would change. Saves nothing.
+  /// [locationId] is where a plain quantity column's stock is; null means the main shop.
+  Future<UploadPreview> previewUpload({required String filename, required List<int> bytes, int? locationId}) async {
+    final res = await _send(
+      'POST',
+      '/uploads/preview',
+      bytes: bytes,
+      query: {'filename': filename, 'location_id': locationId?.toString()},
+    );
+    return UploadPreview.fromJson(res as Map<String, dynamic>);
+  }
+
+  /// Saves the stock sheet: new items are added, and lower counts are recorded as sold.
+  Future<UploadResult> upload({required String filename, required List<int> bytes, int? locationId}) async {
+    final res = await _send(
+      'POST',
+      '/uploads',
+      bytes: bytes,
+      query: {'filename': filename, 'location_id': locationId?.toString()},
+    );
+    return UploadResult.fromJson(res as Map<String, dynamic>);
+  }
+
+  Future<List<UploadResult>> uploads({int limit = 50}) async {
+    final res = await _send('GET', '/uploads', query: {'limit': '$limit'}) as List;
+    return res.map((e) => UploadResult.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// What sold on [date] (the shop's today when null), optionally at one location.
+  Future<SalesReport> sales({String? date, int? locationId}) async {
+    final res = await _send('GET', '/reports/sales', query: {'date': date, 'location_id': locationId?.toString()});
+    return SalesReport.fromJson(res as Map<String, dynamic>);
   }
 
   // Push notifications

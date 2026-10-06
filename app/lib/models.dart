@@ -290,3 +290,194 @@ class AlertRecord {
   final int threshold;
   final DateTime? createdAt;
 }
+
+/// Totals for a stock sheet, as in POST /uploads/preview.
+class UploadSummary {
+  UploadSummary({
+    required this.newItems,
+    required this.newStock,
+    required this.changedItems,
+    required this.sold,
+    required this.received,
+    required this.unchangedItems,
+    required this.skippedRows,
+  });
+
+  factory UploadSummary.fromJson(Map<String, dynamic> j) => UploadSummary(
+    newItems: asInt(j['new_items']),
+    newStock: asInt(j['new_stock']),
+    changedItems: asInt(j['changed_items']),
+    sold: asInt(j['sold']),
+    received: asInt(j['received']),
+    unchangedItems: asInt(j['unchanged_items']),
+    skippedRows: asInt(j['skipped_rows']),
+  );
+
+  final int newItems;
+  final int newStock;
+  final int changedItems;
+  final int sold;
+  final int received;
+  final int unchangedItems;
+  final int skippedRows;
+}
+
+/// An item already in the app whose count the sheet changes.
+class UploadChange {
+  UploadChange({required this.itemName, required this.locationName, required this.from, required this.to});
+
+  factory UploadChange.fromJson(Map<String, dynamic> j) => UploadChange(
+    itemName: j['item_name'] as String,
+    locationName: j['location_name'] as String,
+    from: asInt(j['from']),
+    to: asInt(j['to']),
+  );
+
+  final String itemName;
+  final String locationName;
+  final int from;
+  final int to;
+
+  bool get isSale => to < from;
+}
+
+/// An item the sheet adds to the app.
+class UploadNewItem {
+  UploadNewItem({required this.name, required this.unit, required this.stock, required this.similarTo});
+
+  factory UploadNewItem.fromJson(Map<String, dynamic> j) => UploadNewItem(
+    name: j['name'] as String,
+    unit: (j['unit'] as String?) ?? 'pcs',
+    stock: {
+      for (final s in (j['stock'] as List? ?? const []).cast<Map<String, dynamic>>())
+        s['location_name'] as String: asInt(s['quantity']),
+    },
+    similarTo: ((j['similar_to'] as List?) ?? const []).cast<String>(),
+  );
+
+  final String name;
+  final String unit;
+
+  /// Starting stock by location name.
+  final Map<String, int> stock;
+
+  /// Items already in the app with a similar name: maybe the same item.
+  final List<String> similarTo;
+}
+
+class SkippedRow {
+  SkippedRow({required this.row, required this.item, required this.reason});
+
+  factory SkippedRow.fromJson(Map<String, dynamic> j) =>
+      SkippedRow(row: asInt(j['row']), item: j['item'] as String, reason: j['reason'] as String);
+
+  final int row;
+  final String item;
+  final String reason;
+}
+
+class UploadPreview {
+  UploadPreview({
+    required this.filename,
+    required this.notes,
+    required this.stockColumns,
+    required this.ignoredColumns,
+    required this.summary,
+    required this.newItems,
+    required this.changes,
+    required this.skipped,
+  });
+
+  factory UploadPreview.fromJson(Map<String, dynamic> j) {
+    final columns = j['columns'] as Map<String, dynamic>;
+    return UploadPreview(
+      filename: j['filename'] as String,
+      notes: ((j['notes'] as List?) ?? const []).cast<String>(),
+      stockColumns: {
+        for (final c in (columns['stock'] as List).cast<Map<String, dynamic>>())
+          c['header'] as String: c['location_name'] as String,
+      },
+      ignoredColumns: (columns['ignored'] as List).cast<String>(),
+      summary: UploadSummary.fromJson(j['summary'] as Map<String, dynamic>),
+      newItems: (j['new_items'] as List).map((e) => UploadNewItem.fromJson(e as Map<String, dynamic>)).toList(),
+      changes: (j['changes'] as List).map((e) => UploadChange.fromJson(e as Map<String, dynamic>)).toList(),
+      skipped: (j['skipped'] as List).map((e) => SkippedRow.fromJson(e as Map<String, dynamic>)).toList(),
+    );
+  }
+
+  final String filename;
+  final List<String> notes;
+
+  /// Which location each stock column in the sheet is for, by column header.
+  final Map<String, String> stockColumns;
+  final List<String> ignoredColumns;
+  final UploadSummary summary;
+  final List<UploadNewItem> newItems;
+  final List<UploadChange> changes;
+  final List<SkippedRow> skipped;
+}
+
+/// A saved stock sheet, as in POST /uploads and GET /uploads.
+class UploadResult {
+  UploadResult({
+    required this.id,
+    required this.filename,
+    required this.summary,
+    this.createdAt,
+    this.alerts = const [],
+  });
+
+  factory UploadResult.fromJson(Map<String, dynamic> j) => UploadResult(
+    id: asInt(j['id']),
+    filename: j['filename'] as String,
+    summary: UploadSummary.fromJson(j['summary'] as Map<String, dynamic>),
+    createdAt: asDate(j['created_at']),
+    alerts: StockAlert.listFrom(j['alerts']),
+  );
+
+  final int id;
+  final String filename;
+  final UploadSummary summary;
+  final DateTime? createdAt;
+  final List<StockAlert> alerts;
+}
+
+class SaleLine {
+  SaleLine({
+    required this.itemId,
+    required this.itemName,
+    required this.unit,
+    required this.locationName,
+    required this.quantity,
+  });
+
+  factory SaleLine.fromJson(Map<String, dynamic> j) => SaleLine(
+    itemId: asInt(j['item_id']),
+    itemName: j['item_name'] as String,
+    unit: (j['unit'] as String?) ?? 'pcs',
+    locationName: j['location_name'] as String,
+    quantity: asInt(j['quantity']),
+  );
+
+  final int itemId;
+  final String itemName;
+  final String unit;
+  final String locationName;
+  final int quantity;
+}
+
+/// What sold on one day, as in GET /reports/sales.
+class SalesReport {
+  SalesReport({required this.date, required this.total, required this.items});
+
+  factory SalesReport.fromJson(Map<String, dynamic> j) => SalesReport(
+    date: j['date'] as String,
+    total: asInt(j['total']),
+    items: (j['items'] as List).map((e) => SaleLine.fromJson(e as Map<String, dynamic>)).toList(),
+  );
+
+  /// YYYY-MM-DD in the shop's time zone.
+  final String date;
+  final int total;
+  final List<SaleLine> items;
+}

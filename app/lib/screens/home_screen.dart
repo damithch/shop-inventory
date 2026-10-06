@@ -6,6 +6,7 @@ import '../widgets.dart';
 import 'branches_screen.dart';
 import 'location_stock_screen.dart';
 import 'low_stock_screen.dart';
+import 'sales_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -24,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // Each tab is rebuilt when opened so it always shows fresh counts.
       body: KeyedSubtree(
         key: ValueKey(_tab),
-        child: const [_MainShopTab(), BranchesScreen(), LowStockScreen(), SettingsScreen()][_tab],
+        child: const [_MainShopTab(), BranchesScreen(), SalesScreen(), LowStockScreen(), SettingsScreen()][_tab],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
@@ -39,6 +40,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.store_mall_directory_outlined),
             selectedIcon: Icon(Icons.store_mall_directory),
             label: 'Branches',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.point_of_sale_outlined),
+            selectedIcon: Icon(Icons.point_of_sale),
+            label: 'Sales',
           ),
           NavigationDestination(
             icon: Icon(Icons.warning_amber_outlined),

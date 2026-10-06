@@ -74,11 +74,11 @@ async function recordAlert(client, item, location, quantity, threshold) {
   };
 }
 
-async function insertMovement(client, { itemId, type, quantity, fromId = null, toId = null, note = null }) {
+async function insertMovement(client, { itemId, type, quantity, fromId = null, toId = null, note = null, uploadId = null }) {
   const { rows } = await client.query(
-    `INSERT INTO stock_movements (item_id, type, quantity, from_location_id, to_location_id, note)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [itemId, type, quantity, fromId, toId, note],
+    `INSERT INTO stock_movements (item_id, type, quantity, from_location_id, to_location_id, note, upload_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [itemId, type, quantity, fromId, toId, note, uploadId],
   );
   return rows[0];
 }
@@ -102,15 +102,19 @@ async function run(fn) {
   return { ...result, alerts };
 }
 
-function receive({ itemId, locationId, quantity, note }) {
-  return run(async (client) => {
-    const item = await getItem(client, itemId);
-    const location = await getLocation(client, locationId ?? (await getMainLocationId(client)));
-    const level = await lockLevel(client, item.id, location.id);
-    await applyDelta(client, item, location, level, quantity, 0);
-    const movement = await insertMovement(client, { itemId: item.id, type: 'receive', quantity, toId: location.id, note });
-    return { movement, levels: await levelsFor(client, item.id, [location.id]) };
-  });
+// Receives stock inside an existing transaction (used by the item import too).
+// Receiving only adds stock, so it never raises a low-stock alert.
+async function receiveIn(client, { itemId, locationId, quantity, note, uploadId }) {
+  const item = await getItem(client, itemId);
+  const location = await getLocation(client, locationId ?? (await getMainLocationId(client)));
+  const level = await lockLevel(client, item.id, location.id);
+  await applyDelta(client, item, location, level, quantity, 0);
+  const movement = await insertMovement(client, { itemId: item.id, type: 'receive', quantity, toId: location.id, note, uploadId });
+  return { movement, levels: await levelsFor(client, item.id, [location.id]) };
+}
+
+function receive(args) {
+  return run((client) => receiveIn(client, args));
 }
 
 function transfer({ itemId, fromLocationId, toLocationId, quantity, note }) {
@@ -138,15 +142,22 @@ function transfer({ itemId, fromLocationId, toLocationId, quantity, note }) {
   });
 }
 
-function sale({ itemId, locationId, quantity, note }) {
+// Records a sale inside an existing transaction (used by stock sheet uploads
+// too). Returns any low-stock alert in alerts; the caller sends it after commit.
+async function saleIn(client, { itemId, locationId, quantity, note, uploadId }) {
+  const item = await getItem(client, itemId);
+  const location = await getLocation(client, locationId);
+  const level = await lockLevel(client, item.id, location.id);
+  const alert = await applyDelta(client, item, location, level, -quantity, await getDefaultThreshold(client));
+  const movement = await insertMovement(client, { itemId: item.id, type: 'sale', quantity, fromId: location.id, note, uploadId });
+  return { movement, levels: await levelsFor(client, item.id, [location.id]), alerts: alert ? [alert] : [] };
+}
+
+function sale(args) {
   return run(async (client, alerts) => {
-    const item = await getItem(client, itemId);
-    const location = await getLocation(client, locationId);
-    const level = await lockLevel(client, item.id, location.id);
-    const alert = await applyDelta(client, item, location, level, -quantity, await getDefaultThreshold(client));
-    if (alert) alerts.push(alert);
-    const movement = await insertMovement(client, { itemId: item.id, type: 'sale', quantity, fromId: location.id, note });
-    return { movement, levels: await levelsFor(client, item.id, [location.id]) };
+    const { alerts: raised, ...result } = await saleIn(client, args);
+    alerts.push(...raised);
+    return result;
   });
 }
 
@@ -193,4 +204,4 @@ function setThreshold({ itemId, locationId, threshold }) {
   });
 }
 
-module.exports = { receive, transfer, sale, adjust, setThreshold, getDefaultThreshold, getMainLocationId };
+module.exports = { receive, receiveIn, sale, saleIn, transfer, adjust, setThreshold, getDefaultThreshold, getMainLocationId };

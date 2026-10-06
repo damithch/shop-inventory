@@ -12,6 +12,8 @@ module.exports = {
   adminPassword: required('ADMIN_PASSWORD'),
   jwtSecret: required('JWT_SECRET'),
   tokenTtl: process.env.TOKEN_TTL || '30d',
+  // The shop's time zone, so "today's sales" means the shop's day.
+  timeZone: process.env.SHOP_TIMEZONE || 'Asia/Colombo',
   // Contents of the Firebase service account key file, for push notifications.
   firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT || null,
 };
