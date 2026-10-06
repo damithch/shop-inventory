@@ -67,6 +67,53 @@ screen and show any alert straight away.
 Errors are `{ "error": "message" }` with a 400, 401, 404 or 409 status. The
 messages are written to be shown to the user as they are.
 
+## Importing items from a file
+
+`scripts/import-items.js` adds items, and optionally their starting stock,
+from a `.csv` or `.xlsx` file. Starting stock goes in as `receive` movements
+(note "Imported from <file>"), the same as receiving stock in the app.
+
+Templates to send the client: `templates/items-template.xlsx` and
+`templates/items-template.csv`.
+
+| Column | Required | Also recognised as |
+|---|---|---|
+| Item name | yes | Name, Item, Product, Description, Particulars |
+| SKU | no | Code, Item code, Barcode, Part no |
+| Unit | no, default `pcs` | Units, UOM |
+| Qty | no | Quantity, Stock, Opening stock, On hand, Balance (main shop) |
+| `<location name>` | no | Stock at that location, e.g. `Kandy Branch` or `Kandy Branch Qty` |
+
+Header matching ignores case, spaces and punctuation, and title rows above the
+header are skipped. Location columns must match a location that already exists
+in the app, so add the branches first.
+
+Run it from `backend/` with a `.env` whose `DATABASE_URL` is the database to
+import into (the Supabase Session pooler string for the live app):
+
+```sh
+node --env-file=.env scripts/import-items.js items.xlsx           # preview only
+node --env-file=.env scripts/import-items.js items.xlsx --apply   # import
+```
+
+The preview shows which column was read as what, columns that are not
+imported, the new items, and every skipped row with the reason. Rows are
+skipped when they have no name, a quantity that isn't a whole number of 0 or
+more, or an item that is already in the app (same SKU, or same name when there
+is no SKU) or earlier in the file. That makes running the same file twice
+safe. The import is all or nothing: if anything fails while saving, nothing is
+saved.
+
+If a column isn't recognised, say what it is with `--map`, as often as needed:
+
+```sh
+node --env-file=.env scripts/import-items.js items.xlsx \
+  --map "Prod Desc=name" --map "Bal=stock" --map "Shop 2=stock:Kandy Branch" --map "Notes=ignore"
+```
+
+Use `--sheet "Sheet name"` to read a sheet other than the first. Old `.xls`
+files need saving as `.xlsx` or `.csv` first.
+
 ## Run locally
 
 Needs Node 22 and a Postgres database.
