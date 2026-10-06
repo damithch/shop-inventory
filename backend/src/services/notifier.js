@@ -1,5 +1,5 @@
-// Hook for push notifications. The default implementation only logs; the
-// FCM integration replaces it with setNotifier() at startup.
+// Hook for push notifications. The default implementation only logs; app.js
+// replaces it with the Firebase sender (services/push.js) when it is configured.
 //
 // A notifier receives an array of alerts, each:
 //   { itemId, itemName, locationId, locationName, locationType, quantity, threshold }

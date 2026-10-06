@@ -1,6 +1,18 @@
 const express = require('express');
 const { login, requireAuth } = require('./auth');
 const { HttpError } = require('./errors');
+const config = require('./config');
+const { setNotifier } = require('./services/notifier');
+const { parseServiceAccount, createFcmNotifier } = require('./services/push');
+
+// Push notifications through Firebase, when its key is configured.
+try {
+  const account = parseServiceAccount(config.firebaseServiceAccount);
+  if (account) setNotifier(createFcmNotifier(account));
+  else console.log('FIREBASE_SERVICE_ACCOUNT not set: low-stock alerts are logged, not pushed');
+} catch (err) {
+  console.error(`Push notifications are off: ${err.message}`);
+}
 
 const app = express();
 app.use(express.json());

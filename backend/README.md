@@ -25,8 +25,13 @@ with `PUT /settings`), and can be set per item per location with
 `PUT /stock/threshold`. When a change takes an item from above its level to at
 or below it, the API records an alert and calls the push notification hook in
 `src/services/notifier.js`. It alerts once per drop, not on every sale while
-already low. For now the hook only logs; push notifications through Firebase
-Cloud Messaging plug in there.
+already low.
+
+When `FIREBASE_SERVICE_ACCOUNT` is set, each alert is pushed through Firebase
+Cloud Messaging to every phone registered with `POST /devices`
+(`src/services/push.js`); phones that uninstalled the app are dropped
+automatically. Without it, alerts are only logged. Setup steps are in
+[docs/push-and-apk.md](../docs/push-and-apk.md).
 
 ## API
 
@@ -110,6 +115,9 @@ the whole thing can be handed over to the client.
    - `JWT_SECRET`: a long random string, for example from
      `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
      or any password generator (40+ characters)
+   - `FIREBASE_SERVICE_ACCOUNT` (optional, for push notifications): the
+     whole Firebase service account key file, see
+     [docs/push-and-apk.md](../docs/push-and-apk.md)
 5. Click **Deploy**. When it finishes, open
    `https://<your-project>.vercel.app/health`. It should show `{"ok":true}`.
    That URL is what the mobile app points at.

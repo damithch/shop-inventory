@@ -225,4 +225,14 @@ class ApiClient {
     final res = await _send('GET', '/alerts', query: {'limit': '$limit'}) as List;
     return res.map((e) => AlertRecord.fromJson(e as Map<String, dynamic>)).toList();
   }
+
+  // Push notifications
+
+  Future<void> registerDevice(String pushToken) async {
+    await _send('POST', '/devices', body: {'token': pushToken, 'platform': 'android'});
+  }
+
+  Future<void> unregisterDevice(String pushToken) async {
+    await _send('DELETE', '/devices/${Uri.encodeComponent(pushToken)}');
+  }
 }
