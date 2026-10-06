@@ -75,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       keyboardType: TextInputType.url,
                       decoration: const InputDecoration(
                         labelText: 'Server address',
-                        hintText: 'https://your-api.onrender.com',
+                        hintText: 'https://your-api.vercel.app',
                         border: OutlineInputBorder(),
                       ),
                     ),

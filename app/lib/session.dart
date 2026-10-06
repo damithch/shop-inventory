@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api/api_client.dart';
 
 /// The server address baked in at build time:
-///   flutter build apk --dart-define=API_BASE_URL=https://my-api.onrender.com
+///   flutter build apk --dart-define=API_BASE_URL=https://my-api.vercel.app
 /// It can also be changed on the sign-in screen, which is remembered on the phone.
 const defaultBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:3000');
 
