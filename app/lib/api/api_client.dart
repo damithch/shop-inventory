@@ -30,7 +30,8 @@ class ApiClient {
   /// Called when a signed-in request comes back 401, so the app can sign out.
   final void Function()? onUnauthorized;
 
-  // The free Render plan sleeps when idle and can take about a minute to wake.
+  // Generous, since the first request after a quiet spell is slower (server and
+  // database waking up) and shop Wi-Fi or mobile data can be slow.
   static const _timeout = Duration(seconds: 75);
 
   Uri _uri(String path, [Map<String, String?>? query]) {

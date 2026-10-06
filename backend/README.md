@@ -64,7 +64,7 @@ messages are written to be shown to the user as they are.
 
 ## Run locally
 
-Needs Node 20+ and a Postgres database.
+Needs Node 22 and a Postgres database.
 
 ```sh
 cd backend
@@ -73,7 +73,7 @@ npm install
 node --env-file=.env src/server.js
 ```
 
-Migrations in `migrations/` run automatically on startup. A "Main Shop"
+Migrations listed in `migrations/index.js` run automatically on startup. A "Main Shop"
 location is created on first run; rename it with `PATCH /locations/:id`.
 
 Tests run against a real Postgres database, which they wipe:
@@ -82,7 +82,7 @@ Tests run against a real Postgres database, which they wipe:
 TEST_DATABASE_URL=postgres://user:pass@localhost:5432/inventory_test npm test
 ```
 
-## Deploy (Supabase + Render, both free)
+## Deploy (Supabase + Vercel, both free)
 
 Sign up for both with the project's own Gmail account, not a personal one, so
 the whole thing can be handed over to the client.
@@ -91,28 +91,45 @@ the whole thing can be handed over to the client.
 
 1. Create a new project at [supabase.com](https://supabase.com). Pick the
    region closest to the shop and save the database password.
-2. Open **Connect** (top bar) and copy the **Session pooler** connection
-   string. Use the pooler, not the direct connection: Render can't reach
-   Supabase's direct address.
+2. Open **Connect** (top bar) and copy the **Transaction pooler** connection
+   string (the one on port **6543**). On Vercel the API runs as short-lived
+   functions that open many brief connections, which is what the transaction
+   pooler is built for.
 3. Put your database password into that string in place of `[YOUR-PASSWORD]`.
 
-**2. API on Render**
+**2. API on Vercel**
 
-1. Push this repo to GitHub and connect that GitHub account at
-   [render.com](https://render.com).
-2. Choose **New > Blueprint** and pick this repo. Render reads `render.yaml`
-   and sets up the service from `backend/`.
-3. When it asks, fill in `DATABASE_URL` (the Supabase string) and
-   `ADMIN_PASSWORD` (the password the shop owner will log in with).
-   `JWT_SECRET` is generated for you.
-4. Once it's live, open `https://<your-service>.onrender.com/health`. It
-   should show `{"ok":true}`. That URL is what the mobile app points at.
+1. At [vercel.com](https://vercel.com), sign up with GitHub and allow it to
+   see this repo.
+2. **Add New > Project**, then **Import** this repo.
+3. Next to **Root Directory**, click **Edit** and choose `backend`. Leave
+   Framework Preset as **Other**.
+4. Open **Environment Variables** and add:
+   - `DATABASE_URL`: the Supabase string from step 1
+   - `ADMIN_PASSWORD`: the password the shop owner will log in with
+   - `JWT_SECRET`: a long random string, for example from
+     `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+     or any password generator (40+ characters)
+5. Click **Deploy**. When it finishes, open
+   `https://<your-project>.vercel.app/health`. It should show `{"ok":true}`.
+   That URL is what the mobile app points at.
+
+The database tables are created automatically on the first request. Every
+push to `main` redeploys. If you change an environment variable later, go to
+**Deployments**, open the latest one and choose **Redeploy** so it takes
+effect.
+
+`vercel.json` runs the API in Vercel's Singapore region (`sin1`), next to a
+Supabase project in Southeast Asia. If your Supabase project is elsewhere,
+change it to the [nearest region](https://vercel.com/docs/regions).
 
 Things to know about the free plans:
 
-- Render's free service sleeps after 15 minutes without requests. The first
-  request after that takes up to about a minute while it wakes. A paid
-  instance (about $7/month) stays awake if the client finds that annoying.
+- The first request after a quiet spell takes a second or two longer while
+  the function starts.
 - Supabase pauses a free project after a week with no activity. Daily use of
   the app keeps it awake; if it does pause, restore it from the Supabase
   dashboard.
+- Vercel's free Hobby plan is meant for non-commercial use. For a paying
+  client the Pro plan (about $20/month) is the safe choice; check Vercel's
+  current terms before handover.

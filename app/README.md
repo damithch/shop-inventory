@@ -34,12 +34,12 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000   # Android emulator
 `API_BASE_URL` sets the server the app starts with. Without it the app uses
 `http://10.0.2.2:3000`, which is your computer's `localhost` as seen from the
 Android emulator. On a real phone, use your computer's LAN address or the
-deployed Render URL. Either way it can be changed on the sign-in screen.
+deployed Vercel URL. Either way it can be changed on the sign-in screen.
 
 ## Build the APK
 
 ```sh
-flutter build apk --release --dart-define=API_BASE_URL=https://<your-service>.onrender.com
+flutter build apk --release --dart-define=API_BASE_URL=https://<your-project>.vercel.app
 ```
 
 The file is `build/app/outputs/flutter-apk/app-release.apk`. (Release signing is
