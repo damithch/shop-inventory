@@ -25,11 +25,11 @@ after(async () => {
   await db.pool.end();
 });
 
-test('reads Excel rows, WhatsApp messages and plain lines', () => {
+test('reads Excel rows and plain lines', () => {
   const text = [
     'Item\tQty\tPrice',
     'DIOR SAUVAGE\t2\t25000',
-    '[06/10/2026, 9:15 am] Nimal: 3. LATTAFA ASAD 4 pcs',
+    '3. LATTAFA ASAD 4 pcs',
     'AFNAN 9AM - 2',
     'RASASI MAX x 3',
     '* YARA x 3',

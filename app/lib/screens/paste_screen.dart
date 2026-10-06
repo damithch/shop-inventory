@@ -5,7 +5,7 @@ import '../models.dart';
 import '../session.dart';
 import '../widgets.dart';
 
-/// Paste a list copied from Excel or WhatsApp: purchases received, stock moved
+/// Paste rows copied from Excel: purchases received, stock moved
 /// from the main shop to a branch, or sales. Check the preview, then save.
 /// Pops with true once saved.
 class PasteScreen extends StatefulWidget {
@@ -74,7 +74,7 @@ class _PasteScreenState extends State<PasteScreen> {
     final text = data?.text ?? '';
     if (!mounted) return;
     if (text.trim().isEmpty) {
-      showMessage(context, 'Nothing copied yet. Copy the list in Excel or WhatsApp first.');
+      showMessage(context, 'Nothing copied yet. Copy the rows in Excel first.');
       return;
     }
     _changed(() => _text.text = text);

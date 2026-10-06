@@ -1,5 +1,4 @@
-// Lists of items pasted into the app (copied from Excel, often passed along
-// through WhatsApp): purchases received, transfers between locations, and
+// Lists of items pasted into the app (usually rows copied from Excel): purchases received, transfers between locations, and
 // sales. Each line is an item and how many. Reading and planning touch
 // nothing; only applyPaste writes, inside the caller's transaction.
 const { normalize } = require('./items');
@@ -7,8 +6,6 @@ const { receiveIn, transferIn, saleIn } = require('../services/stock');
 
 const ACTIONS = ['receive', 'transfer', 'sale'];
 
-// "[06/10/2026, 9:15 am] Nimal: " in front of a forwarded WhatsApp message.
-const WHATSAPP_PREFIX = /^\[[^\]]{4,40}\]\s*[^:]{1,40}:\s*/;
 const SERIAL = /^\d{1,4}\s*[.)]\s+/;
 const UNIT_WORDS = '(?:pcs?|pieces?|nos?|units?|bottles?|qty)';
 const hasLetter = (s) => /[a-z]/i.test(s);
@@ -16,7 +13,7 @@ const toInt = (s) => (/^\d[\d,]*$/.test(s) ? Number(s.replace(/,/g, '')) : null)
 
 // Splits one pasted line into an item name and quantity, or null.
 function parseLine(raw) {
-  const text = raw.replace(WHATSAPP_PREFIX, '').trim();
+  const text = raw.trim();
   if (text.includes('\t')) {
     // Excel cells: the first cell with letters is the name, the first whole
     // number after it is the quantity (later numbers are usually prices).

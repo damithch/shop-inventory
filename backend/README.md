@@ -103,8 +103,8 @@ entered in the app.
 
 ## Lists pasted into the app
 
-Purchases, transfers and sales can also be pasted as text: rows copied from
-Excel, or the same list forwarded through WhatsApp. `/paste/preview` shows what
+Purchases, transfers and sales can also be pasted as text, usually rows
+copied from Excel. `/paste/preview` shows what
 would change; `/paste` saves it. `action` is one of:
 
 - `receive`: purchases. Stock is added at `location_id` (default the main
@@ -116,8 +116,7 @@ would change; `/paste` saves it. `action` is one of:
 Each line is an item and how many: `Rice 5`, `Rice - 5`, `Rice x5`,
 `5 x Rice`, `Rice 5 pcs`, or Excel cells (the first cell with letters is the
 name, the first whole number after it the quantity, so a price column further
-right is ignored). WhatsApp's `[date, time] Name:` prefix and list numbers
-like `1.` are dropped. Lines for the same item are added together.
+right is ignored). List numbers like `1.` are dropped. Lines for the same item are added together.
 
 Lines that can't be used change nothing and come back in `skipped` with the
 line number and why: headings, totals, no quantity, an item that isn't in the
