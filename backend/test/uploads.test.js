@@ -112,6 +112,20 @@ test('a plain quantity column can be for a branch', async () => {
   assert.equal(rice.total_quantity, 4);
 });
 
+test('each place uploads its own sheet and its sales are recorded there', async () => {
+  await upload('/uploads', 'home.csv', 'Item,Qty\nRice,10\n');
+  await upload('/uploads', 'branch.csv', 'Item,Qty\nRice,6\n', { location_id: branchId });
+  await upload('/uploads', 'branch-evening.csv', 'Item,Qty\nRice,4\n', { location_id: branchId });
+  await upload('/uploads', 'home-evening.csv', 'Item,Qty\nRice,9\n');
+
+  const rice = await itemByName('Rice');
+  assert.equal(rice.main_quantity, 9);
+  assert.equal(rice.total_quantity, 13);
+  const all = (await api.get('/reports/sales')).body;
+  assert.deepEqual(all.items.map((s) => [s.location_name, s.quantity]), [['Home', 2], ['Main Shop', 1]]);
+  assert.equal((await api.get(`/reports/sales?location_id=${branchId}`)).body.total, 2);
+});
+
 test('reads an Excel sheet with no header row', async () => {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Home');

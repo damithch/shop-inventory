@@ -198,6 +198,18 @@ void main() {
     // Back on the sales screen, reloaded.
     expect(find.text('3 items sold'), findsOneWidget);
     expect(find.text('3 bag'), findsOneWidget);
+
+    // A sale at the Kandy branch: the day shows each place's sales separately.
+    backend.sales.add((item: 10, loc: 2, qty: 1));
+    await tester.tap(find.text('Low stock').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sales'));
+    await tester.pumpAndSettle();
+    expect(find.text('4 items sold'), findsOneWidget);
+    await tester.tap(find.text('Kandy (1)'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 item sold at Kandy'), findsOneWidget);
+    expect(find.text('Main Shop'), findsNothing);
   });
 
   testWidgets('changes the default alert level', (tester) async {

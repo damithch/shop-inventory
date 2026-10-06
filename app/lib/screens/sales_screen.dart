@@ -22,6 +22,9 @@ class _SalesScreenState extends State<SalesScreen> {
   /// null means today in the shop's time zone, which the server works out.
   DateTime? _day;
 
+  /// Show only this location's sales; null shows every location.
+  String? _location;
+
   void _setDay(DateTime? day) {
     setState(() => _day = day);
     _loader.currentState?.reload();
@@ -66,6 +69,13 @@ class _SalesScreenState extends State<SalesScreen> {
         load: () => api.sales(date: _day == null ? null : _isoDate(_day!)),
         builder: (context, report, _) {
           final shown = DateTime.parse(report.date);
+          final byLocation = <String, int>{};
+          for (final s in report.items) {
+            byLocation[s.locationName] = (byLocation[s.locationName] ?? 0) + s.quantity;
+          }
+          final location = byLocation.containsKey(_location) ? _location : null;
+          final lines = report.items.where((s) => location == null || s.locationName == location).toList();
+          final total = location == null ? report.total : byLocation[location]!;
           return ListView(
             padding: const EdgeInsets.only(bottom: 96),
             children: [
@@ -89,10 +99,30 @@ class _SalesScreenState extends State<SalesScreen> {
                   ),
                 ],
               ),
+              if (byLocation.length > 1)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: Text('All (${report.total})'),
+                        selected: location == null,
+                        onSelected: (_) => setState(() => _location = null),
+                      ),
+                      for (final e in byLocation.entries)
+                        ChoiceChip(
+                          label: Text('${e.key} (${e.value})'),
+                          selected: location == e.key,
+                          onSelected: (_) => setState(() => _location = e.key),
+                        ),
+                    ],
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Text(
-                  report.total == 1 ? '1 item sold' : '${report.total} items sold',
+                  '${total == 1 ? '1 item sold' : '$total items sold'}${location == null ? '' : ' at $location'}',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
@@ -104,7 +134,7 @@ class _SalesScreenState extends State<SalesScreen> {
                     textAlign: TextAlign.center,
                   ),
                 ),
-              for (final s in report.items)
+              for (final s in lines)
                 ListTile(
                   title: Text(s.itemName),
                   subtitle: Text(s.locationName),
