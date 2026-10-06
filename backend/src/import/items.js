@@ -9,7 +9,7 @@ const { receiveIn } = require('../services/stock');
 
 // Header names we recognise, compared after normalize().
 const ALIASES = {
-  name: ['name', 'item', 'itemname', 'items', 'product', 'productname', 'description', 'itemdescription', 'productdescription', 'article', 'particulars'],
+  name: ['name', 'item', 'itemname', 'items', 'product', 'productname', 'description', 'itemdescription', 'productdescription', 'article', 'particulars', 'itemdetails', 'details'],
   sku: ['sku', 'code', 'itemcode', 'productcode', 'barcode', 'itemno', 'itemnumber', 'partno', 'partnumber', 'ref', 'reference'],
   unit: ['unit', 'units', 'uom', 'unitofmeasure', 'measure'],
   // A plain quantity column means stock at the main shop.
@@ -183,6 +183,10 @@ function planImport(rows, headerIndex, mapping, existingItems) {
 
     if (!name) {
       skip('no item name');
+      continue;
+    }
+    if (/^(grand\s*)?total$/i.test(name)) {
+      skip('totals row');
       continue;
     }
     const stock = [];

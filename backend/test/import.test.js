@@ -78,11 +78,13 @@ test('reports every skipped row and unknown column', async () => {
     'Dhal 2,DHAL,5,,',
     ',,,,',
     'Soap,,0,,',
+    'Total,,9,,',
   ].join('\n'));
   const { mapping, plan } = await planFor(file);
   assert.deepEqual(mapping.ignored.map((c) => c.header), ['Price', 'Galle Branch']);
   assert.deepEqual(plan.create.map((e) => e.name), ['Dhal', 'Soap']);
-  assert.deepEqual(plan.skipped.map((s) => s.row), [2, 3, 4, 5, 7]);
+  assert.deepEqual(plan.skipped.map((s) => s.row), [2, 3, 4, 5, 7, 10]);
+  assert.match(plan.skipped[5].reason, /totals row/);
   assert.match(plan.skipped[0].reason, /already in the app/);
   assert.match(plan.skipped[1].reason, /no item name/);
   assert.match(plan.skipped[2].reason, /not a whole number/);
@@ -113,6 +115,12 @@ test('the command previews by default and writes only with --apply', async () =>
   const applied = await run('node', [script, file, '--apply'], { env });
   assert.match(applied.stdout, /Imported 3 items with 5 stock entries/);
   assert.equal((await api.get('/items')).body.length, 3);
+
+  const extra = writeCsv('extra.csv', 'Name,Qty,Galle\nGlue,1,2\n');
+  await assert.rejects(run('node', [script, extra, '--apply'], { env }), /left out: "Galle"/);
+  assert.equal((await api.get('/items')).body.length, 3);
+  await run('node', [script, extra, '--apply', '--map', 'Galle=ignore'], { env });
+  assert.equal((await api.get('/items')).body.length, 4);
 
   const again = await run('node', [script, file], { env });
   assert.match(again.stdout, /New items: 0/);

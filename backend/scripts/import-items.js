@@ -88,6 +88,14 @@ async function main() {
     const plan = planImport(rows, headerIndex, mapping, items);
     printPlan({ mapping, plan, headerIndex }, rows);
 
+    // A column we couldn't place may be stock for a location that doesn't
+    // exist yet. Items that go in without it would be skipped on a re-run.
+    const unplaced = mapping.ignored.filter((c) => c.reason !== 'ignored with --map');
+    if (opts.apply && unplaced.length) {
+      throw new Error(`\nNot importing: these columns would be left out: ${unplaced.map((c) => `"${c.header}"`).join(', ')}.\n`
+        + 'If one is stock for a location, add that location in the app first (or use --map "<header>=stock:<location>").\n'
+        + 'Otherwise confirm it can be left out with --map "<header>=ignore".');
+    }
     if (!opts.apply) {
       console.log('\nPreview only, nothing was saved. Run again with --apply to import.');
       return;

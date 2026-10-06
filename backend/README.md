@@ -101,7 +101,9 @@ imported, the new items, and every skipped row with the reason. Rows are
 skipped when they have no name, a quantity that isn't a whole number of 0 or
 more, or an item that is already in the app (same SKU, or same name when there
 is no SKU) or earlier in the file. That makes running the same file twice
-safe. The import is all or nothing: if anything fails while saving, nothing is
+safe. `--apply` refuses to run while any column would be left out, because
+that is usually stock for a location that hasn't been added yet; once you're
+sure a column isn't needed, pass `--map "<header>=ignore"`. The import is all or nothing: if anything fails while saving, nothing is
 saved.
 
 If a column isn't recognised, say what it is with `--map`, as often as needed:
