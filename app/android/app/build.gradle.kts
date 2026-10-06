@@ -4,6 +4,15 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase settings for push notifications. Put the google-services.json
+// downloaded from the Firebase console next to this file. Without it the app
+// still builds and works, just without push notifications.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.warn("No android/app/google-services.json: building without push notifications.")
+}
+
 android {
     namespace = "com.shopinventory.shop_inventory"
     compileSdk = flutter.compileSdkVersion

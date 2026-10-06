@@ -24,6 +24,9 @@ class FakeBackend {
   final stock = <String, int>{'10:1': 8, '10:2': 4};
   final alerts = <Map<String, dynamic>>[];
 
+  /// Push tokens registered with POST /devices.
+  final devices = <String>{};
+
   http.Client get client => MockClient(_handle);
 
   int _qty(int item, int loc) => stock['$item:$loc'] ?? 0;
@@ -195,6 +198,14 @@ class FakeBackend {
     if (req.method == 'PUT' && path == '/settings') {
       defaultThreshold = body['default_threshold'] as int;
       return _json({'default_threshold': defaultThreshold});
+    }
+    if (req.method == 'POST' && path == '/devices') {
+      devices.add(body['token'] as String);
+      return _json({'token': body['token'], 'platform': body['platform']}, 201);
+    }
+    if (req.method == 'DELETE' && path.startsWith('/devices/')) {
+      devices.remove(Uri.decodeComponent(path.substring('/devices/'.length)));
+      return http.Response('', 204);
     }
     return _error(404, 'Not found');
   }

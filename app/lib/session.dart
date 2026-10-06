@@ -1,20 +1,32 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/api_client.dart';
+import 'push.dart';
 
-/// The server address baked in at build time:
-///   flutter build apk --dart-define=API_BASE_URL=https://my-api.vercel.app
+/// The server address the app starts with: the live server, unless another is
+/// given at build time, e.g. for a server on your computer seen from the emulator:
+///   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
 /// It can also be changed on the sign-in screen, which is remembered on the phone.
-const defaultBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:3000');
+const defaultBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'https://backend-eight-lemon-fwgmzqzwyt.vercel.app',
+);
 
 /// Holds the server address and sign-in token, and the API client that uses them.
 class Session extends ChangeNotifier {
-  Session(this._prefs, {this._httpClient}) {
+  Session(this._prefs, {this._httpClient, this._push}) {
     _baseUrl = _prefs.getString(_baseUrlKey) ?? defaultBaseUrl;
     _token = _prefs.getString(_tokenKey);
     _api = _buildApi();
+    _push?.onTokenRefresh.listen((token) {
+      _pushToken = token;
+      _registerPush();
+    });
+    if (signedIn) unawaited(_registerPush());
   }
 
   static const _baseUrlKey = 'api_base_url';
@@ -22,6 +34,8 @@ class Session extends ChangeNotifier {
 
   final SharedPreferences _prefs;
   final http.Client? _httpClient;
+  final PushService? _push;
+  String? _pushToken;
   late String _baseUrl;
   String? _token;
   late ApiClient _api;
@@ -48,14 +62,33 @@ class Session extends ChangeNotifier {
     await _prefs.setString(_tokenKey, token);
     _api = _buildApi();
     notifyListeners();
+    unawaited(_registerPush());
   }
 
   Future<void> signOut() async {
     if (_token == null) return;
+    // Stop low-stock notifications to this phone. Best effort: signing out
+    // must work even offline.
+    final oldApi = _api;
+    final pushToken = _pushToken;
     _token = null;
     await _prefs.remove(_tokenKey);
     _api = _buildApi();
     notifyListeners();
+    if (pushToken != null) unawaited(oldApi.unregisterDevice(pushToken).catchError((_) {}));
+  }
+
+  /// Tells the server where to send low-stock alerts for this phone. Repeated
+  /// on every start, which is harmless and recovers from a missed attempt.
+  Future<void> _registerPush() async {
+    final push = _push;
+    if (push == null || !signedIn) return;
+    try {
+      final pushToken = _pushToken ??= await push.getToken();
+      if (pushToken != null && signedIn) await _api.registerDevice(pushToken);
+    } catch (e) {
+      debugPrint('Could not register for push notifications: $e');
+    }
   }
 }
 

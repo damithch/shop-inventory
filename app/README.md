@@ -18,8 +18,11 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
 - **Settings**: the default alert level (3 to start), alert history, sign out.
 
 When a stock change takes something down to its alert level, the app shows a
-"Low stock" warning straight away. Push notifications to the phone come later
-through Firebase Cloud Messaging.
+"Low stock" warning straight away, and every signed-in phone gets a push
+notification through Firebase Cloud Messaging (also when the change was made
+on another phone). The app registers for push after sign-in and unregisters on
+sign-out (`lib/push.dart`, `lib/session.dart`). Built without
+`android/app/google-services.json`, the app works the same minus push.
 
 ## Run it
 
@@ -31,15 +34,21 @@ flutter pub get
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000   # Android emulator to a local API
 ```
 
-`API_BASE_URL` sets the server the app starts with. Without it the app uses
-`http://10.0.2.2:3000`, which is your computer's `localhost` as seen from the
-Android emulator. On a real phone, use your computer's LAN address or the
-deployed Vercel URL. Either way it can be changed on the sign-in screen.
+`API_BASE_URL` sets the server the app starts with. Without it the app uses the
+live server, `https://backend-eight-lemon-fwgmzqzwyt.vercel.app`. For the
+emulator talking to an API on your computer, use `http://10.0.2.2:3000` as
+above. Either way it can be changed on the sign-in screen.
 
 ## Build the APK
 
+GitHub builds it: **Actions > Build APK > Run workflow**, then download
+`shop-inventory-apk` from the finished run. Full steps, including the Firebase
+setup for push notifications, are in [docs/push-and-apk.md](../docs/push-and-apk.md).
+
+To build locally instead, put `google-services.json` in `android/app/` and run:
+
 ```sh
-flutter build apk --release --dart-define=API_BASE_URL=https://<your-project>.vercel.app
+flutter build apk --release
 ```
 
 The file is `build/app/outputs/flutter-apk/app-release.apk`. (Release signing is

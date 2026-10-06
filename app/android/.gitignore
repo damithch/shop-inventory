@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Firebase settings: the APK workflow writes it from the GOOGLE_SERVICES_JSON secret.
+/app/google-services.json

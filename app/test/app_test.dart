@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shop_inventory/api/api_client.dart';
 import 'package:shop_inventory/main.dart';
+import 'package:shop_inventory/push.dart';
 import 'package:shop_inventory/session.dart';
 
 import 'fake_backend.dart';
@@ -55,6 +58,31 @@ void main() {
       expect(result.alerts.single.message, 'Rice 5kg is low at Main Shop: 2 left (alert level 3)');
       expect(backend.stock['10:2'], 10);
     });
+  });
+
+  test('registers the phone for push alerts while signed in', () async {
+    final push = FakePush('phone-1');
+    final session = Session(await SharedPreferences.getInstance(), httpClient: backend.client, push: push);
+    await session.signIn('secret');
+    await pumpEventQueue();
+    expect(backend.devices, {'phone-1'});
+
+    // Firebase hands out a new token.
+    push.refresh.add('phone-2');
+    await pumpEventQueue();
+    expect(backend.devices, containsAll(['phone-2']));
+
+    await session.signOut();
+    await pumpEventQueue();
+    expect(backend.devices, isNot(contains('phone-2')));
+
+    // Starting the app signed in registers again.
+    await session.signIn('secret');
+    await pumpEventQueue();
+    backend.devices.clear();
+    Session(await SharedPreferences.getInstance(), httpClient: backend.client, push: FakePush('phone-2'));
+    await pumpEventQueue();
+    expect(backend.devices, {'phone-2'});
   });
 
   testWidgets('wrong password shows the error and stays on sign in', (tester) async {
@@ -157,4 +185,17 @@ void main() {
     expect(backend.defaultThreshold, 5);
     expect(find.text('Warn when 5 or fewer are left'), findsOneWidget);
   });
+}
+
+class FakePush implements PushService {
+  FakePush(this.token);
+
+  final String token;
+  final refresh = StreamController<String>.broadcast();
+
+  @override
+  Future<String?> getToken() async => token;
+
+  @override
+  Stream<String> get onTokenRefresh => refresh.stream;
 }

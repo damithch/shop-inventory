@@ -12,4 +12,6 @@ module.exports = {
   adminPassword: required('ADMIN_PASSWORD'),
   jwtSecret: required('JWT_SECRET'),
   tokenTtl: process.env.TOKEN_TTL || '30d',
+  // Contents of the Firebase service account key file, for push notifications.
+  firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT || null,
 };
