@@ -40,7 +40,7 @@ test('imports the sample template with stock as receive movements', async () => 
   const { plan } = await planFor(path.join(__dirname, '..', 'templates', 'items-template.xlsx'));
   assert.equal(plan.create.length, 3);
   assert.equal(plan.skipped.length, 0);
-  await applyPlan(db, plan, 'Imported from test');
+  await db.withTransaction((c) => applyPlan(c, plan, { note: 'Imported from test' }));
 
   const items = (await api.get('/items')).body;
   const rice = items.find((i) => i.sku === 'RICE5');

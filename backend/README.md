@@ -60,12 +60,44 @@ All endpoints except `/health` and `/auth/login` need `Authorization: Bearer <to
 | POST | `/devices` | `{ token, platform? }` | Registers a phone's FCM token |
 | DELETE | `/devices/:token` | | |
 | GET | `/alerts` | `?limit=&before_id=` | Alert history, newest first |
+| POST | `/uploads/preview` | file as the body, `?filename=&location_id=` | What a stock sheet would change; saves nothing |
+| POST | `/uploads` | same | Saves the stock sheet (see below) |
+| GET | `/uploads` | `?limit=` | Past uploads with their summary |
+| GET | `/reports/sales` | `?date=YYYY-MM-DD&location_id=` | What sold that day (default today), per item and location |
 
 Stock endpoints return `{ movement, levels, alerts }` so the app can update its
 screen and show any alert straight away.
 
 Errors are `{ "error": "message" }` with a 400, 401, 404 or 409 status. The
 messages are written to be shown to the user as they are.
+
+## Stock sheets uploaded from the app
+
+The app can upload a stock sheet (`.xlsx` or `.csv`), for example the shop's
+stock list each morning and again at the end of the day. Send the file as the
+raw request body (`Content-Type: application/octet-stream`) with its name in
+`?filename=`. `/uploads/preview` shows what would change; `/uploads` saves it.
+
+- Columns are read the same way as the import script below. A plain quantity
+  column (Qty, Stock, ...) is the stock at `location_id`, or the main shop if
+  that isn't given. A sheet with no header row works too when it's just names
+  and counts.
+- Items not in the app yet are created, with their count as stock received.
+- For items already in the app, the count in the sheet becomes the stock at
+  that location. A lower count than the app has is recorded as a **sale**, a
+  higher one as stock **received**. Each movement has `upload_id` set, and
+  the note "Stock sheet <file name>".
+- Items missing from the sheet, and blank quantity cells, leave stock as it is.
+- Names match ignoring case, spaces and punctuation. New items whose name is
+  part of an existing one (or the other way round) are listed with
+  `similar_to`, so the app can warn before a short name becomes a duplicate.
+- Rows that can't be used (no name, negative or fractional count, totals row,
+  duplicate) are listed in `skipped` and change nothing.
+- Sales that take an item to its alert level send the usual low-stock alert.
+
+`/reports/sales` adds up sales on one day in the shop's time zone
+(`SHOP_TIMEZONE`, default `Asia/Colombo`), from both stock sheets and sales
+entered in the app.
 
 ## Importing items from a file
 

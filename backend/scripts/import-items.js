@@ -70,7 +70,9 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const db = require('../src/db');
   const migrate = require('../src/migrate');
-  const { readTable, findHeaderRow, mapColumns, planImport, loadContext, applyPlan } = require('../src/import/items');
+  const {
+    readTable, findHeaderRow, mapColumns, planImport, summarize, loadContext, applyPlan,
+  } = require('../src/import/items');
 
   try {
     const rows = await readTable(opts.file, { sheet: opts.sheet });
@@ -81,6 +83,8 @@ async function main() {
     }
     await migrate();
     const { locations, items } = await loadContext(db);
+    // The script only adds new items; uploading a sheet in the app also
+    // updates the stock of items already there.
     const { mapping, errors } = mapColumns(rows[headerIndex], locations, opts.map);
     if (errors.length) {
       throw new Error(`${errors.join('\n')}\nColumns in the file: ${rows[headerIndex].filter(Boolean).join(', ')}`);
@@ -104,7 +108,13 @@ async function main() {
       console.log('\nNothing to import.');
       return;
     }
-    const result = await applyPlan(db, plan, `Imported from ${path.basename(opts.file)}`);
+    const filename = path.basename(opts.file);
+    const result = await db.withTransaction(async (client) => {
+      const { rows: upload } = await client.query(
+        'INSERT INTO stock_uploads (filename, summary) VALUES ($1, $2) RETURNING id', [filename, summarize(plan)],
+      );
+      return applyPlan(client, plan, { note: `Imported from ${filename}`, uploadId: upload[0].id });
+    });
     console.log(`\nImported ${result.items} items with ${result.movements} stock entries.`);
   } finally {
     await db.pool.end();
