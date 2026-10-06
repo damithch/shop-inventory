@@ -117,28 +117,35 @@ function receive(args) {
   return run((client) => receiveIn(client, args));
 }
 
-function transfer({ itemId, fromLocationId, toLocationId, quantity, note }) {
+// Moves stock inside an existing transaction (used by pasted transfer lists
+// too). Returns any low-stock alert in alerts; the caller sends it after commit.
+async function transferIn(client, { itemId, fromLocationId, toLocationId, quantity, note, uploadId }) {
+  const item = await getItem(client, itemId);
+  const fromId = fromLocationId ?? (await getMainLocationId(client));
+  if (fromId === toLocationId) throw badRequest('Cannot transfer to the same location');
+  const from = await getLocation(client, fromId);
+  const to = await getLocation(client, toLocationId);
+  const defaultThreshold = await getDefaultThreshold(client);
+
+  // Lock rows in a fixed order so concurrent transfers can't deadlock.
+  const [first, second] = from.id < to.id ? [from, to] : [to, from];
+  const locked = {};
+  locked[first.id] = await lockLevel(client, item.id, first.id);
+  locked[second.id] = await lockLevel(client, item.id, second.id);
+
+  const alert = await applyDelta(client, item, from, locked[from.id], -quantity, defaultThreshold);
+  await applyDelta(client, item, to, locked[to.id], quantity, defaultThreshold);
+  const movement = await insertMovement(client, {
+    itemId: item.id, type: 'transfer', quantity, fromId: from.id, toId: to.id, note, uploadId,
+  });
+  return { movement, levels: await levelsFor(client, item.id, [from.id, to.id]), alerts: alert ? [alert] : [] };
+}
+
+function transfer(args) {
   return run(async (client, alerts) => {
-    const item = await getItem(client, itemId);
-    const fromId = fromLocationId ?? (await getMainLocationId(client));
-    if (fromId === toLocationId) throw badRequest('Cannot transfer to the same location');
-    const from = await getLocation(client, fromId);
-    const to = await getLocation(client, toLocationId);
-    const defaultThreshold = await getDefaultThreshold(client);
-
-    // Lock rows in a fixed order so concurrent transfers can't deadlock.
-    const [first, second] = from.id < to.id ? [from, to] : [to, from];
-    const locked = {};
-    locked[first.id] = await lockLevel(client, item.id, first.id);
-    locked[second.id] = await lockLevel(client, item.id, second.id);
-
-    const alert = await applyDelta(client, item, from, locked[from.id], -quantity, defaultThreshold);
-    if (alert) alerts.push(alert);
-    await applyDelta(client, item, to, locked[to.id], quantity, defaultThreshold);
-    const movement = await insertMovement(client, {
-      itemId: item.id, type: 'transfer', quantity, fromId: from.id, toId: to.id, note,
-    });
-    return { movement, levels: await levelsFor(client, item.id, [from.id, to.id]) };
+    const { alerts: raised, ...result } = await transferIn(client, args);
+    alerts.push(...raised);
+    return result;
   });
 }
 
@@ -204,4 +211,4 @@ function setThreshold({ itemId, locationId, threshold }) {
   });
 }
 
-module.exports = { receive, receiveIn, sale, saleIn, transfer, adjust, setThreshold, getDefaultThreshold, getMainLocationId };
+module.exports = { receive, receiveIn, sale, saleIn, transfer, transferIn, adjust, setThreshold, getDefaultThreshold, getMainLocationId };

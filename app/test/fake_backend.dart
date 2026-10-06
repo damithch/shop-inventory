@@ -203,6 +203,9 @@ class FakeBackend {
     if (req.method == 'POST' && (path == '/uploads/preview' || path == '/uploads')) {
       return _upload(req, save: path == '/uploads');
     }
+    if (req.method == 'POST' && (path == '/paste/preview' || path == '/paste')) {
+      return _paste(body, save: path == '/paste');
+    }
     if (req.method == 'GET' && path == '/uploads') return _json(uploads.reversed.toList());
     if (req.method == 'GET' && path == '/reports/sales') {
       return _json({
@@ -323,5 +326,94 @@ class FakeBackend {
       'changes': changes,
       'skipped': <Object>[],
     });
+  }
+
+  /// Pasted lists: "name qty" per line, names matched exactly (ignoring case).
+  http.Response _paste(Map<String, dynamic> body, {required bool save}) {
+    final action = body['action'] as String;
+    final locationId = body['location_id'] as int?;
+    final from = action == 'receive' ? null : (locationId ?? 1);
+    final to = action == 'receive' ? (locationId ?? 1) : body['to_location_id'] as int?;
+    if (action == 'transfer' && to == null) return _error(400, 'Choose where the stock is going');
+    final lines = <Map<String, dynamic>>[];
+    final skipped = <Map<String, dynamic>>[];
+    final rows = (body['text'] as String).split('\n');
+    for (var i = 0; i < rows.length; i++) {
+      final m = RegExp(r'^(.*\S)\s+(\d+)$').firstMatch(rows[i].trim());
+      if (m == null) {
+        if (rows[i].trim().isNotEmpty) {
+          skipped.add({'line': i + 1, 'text': rows[i], 'reason': 'no quantity on this line'});
+        }
+        continue;
+      }
+      final name = m[1]!;
+      final qty = int.parse(m[2]!);
+      final item = items.where((it) => (it['name'] as String).toLowerCase() == name.toLowerCase()).firstOrNull;
+      if (item == null && action != 'receive') {
+        skipped.add({'line': i + 1, 'text': rows[i], 'reason': 'not in the app'});
+      } else if (item != null && from != null && _qty(item['id'] as int, from) < qty) {
+        skipped.add({
+          'line': i + 1,
+          'text': rows[i],
+          'reason': 'only ${_qty(item['id'] as int, from)} at ${_loc(from)['name']}, $qty asked for',
+        });
+      } else {
+        lines.add({
+          'lines': [i + 1],
+          'name': name,
+          'quantity': qty,
+          'item_id': item?['id'],
+          'item_name': item?['name'] ?? name,
+          'new_item': item == null,
+          'similar_to': <String>[],
+        });
+      }
+    }
+    final units = lines.fold<int>(0, (t, l) => t + (l['quantity'] as int));
+    final summary = {
+      'kind': action,
+      'new_items': lines.where((l) => l['new_item'] == true).length,
+      'new_stock': 0,
+      'changed_items': lines.where((l) => l['new_item'] != true).length,
+      'received': action == 'receive' ? units : 0,
+      'transferred': action == 'transfer' ? units : 0,
+      'sold': action == 'sale' ? units : 0,
+      'unchanged_items': 0,
+      'skipped_rows': skipped.length,
+    };
+    Map<String, dynamic>? place(int? id) => id == null ? null : {'location_id': id, 'location_name': _loc(id)['name']};
+    if (!save) {
+      return _json({
+        'action': action,
+        'from': place(from),
+        'to': place(to),
+        'lines': lines,
+        'skipped': skipped,
+        'summary': summary,
+      });
+    }
+    final raised = <Map<String, dynamic>>[];
+    for (final l in lines) {
+      var id = l['item_id'] as int?;
+      if (id == null) {
+        id = 100 + items.length;
+        items.add({'id': id, 'name': l['name'], 'sku': null, 'unit': 'pcs', 'archived': false});
+      }
+      final qty = l['quantity'] as int;
+      if (from != null) {
+        final alert = _change(id, from, -qty);
+        if (alert != null) raised.add(alert);
+      }
+      if (to != null) _change(id, to, qty);
+      if (action == 'sale') sales.add((item: id, loc: from!, qty: qty));
+    }
+    final upload = {
+      'id': uploads.length + 1,
+      'filename': 'Pasted ${action == 'receive' ? 'purchase' : action}',
+      'summary': summary,
+      'created_at': '2026-10-06T12:00:00Z',
+    };
+    uploads.add(upload);
+    return _json({...upload, 'alerts': raised}, 201);
   }
 }

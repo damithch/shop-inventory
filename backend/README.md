@@ -63,6 +63,8 @@ All endpoints except `/health` and `/auth/login` need `Authorization: Bearer <to
 | POST | `/uploads/preview` | file as the body, `?filename=&location_id=` | What a stock sheet would change; saves nothing |
 | POST | `/uploads` | same | Saves the stock sheet (see below) |
 | GET | `/uploads` | `?limit=` | Past uploads with their summary |
+| POST | `/paste/preview` | `{ action, text, location_id?, to_location_id? }` | What a pasted list would change; saves nothing |
+| POST | `/paste` | same | Saves the pasted list (see below) |
 | GET | `/reports/sales` | `?date=YYYY-MM-DD&location_id=` | What sold that day (default today), per item and location |
 
 Stock endpoints return `{ movement, levels, alerts }` so the app can update its
@@ -98,6 +100,32 @@ raw request body (`Content-Type: application/octet-stream`) with its name in
 `/reports/sales` adds up sales on one day in the shop's time zone
 (`SHOP_TIMEZONE`, default `Asia/Colombo`), from both stock sheets and sales
 entered in the app.
+
+## Lists pasted into the app
+
+Purchases, transfers and sales can also be pasted as text: rows copied from
+Excel, or the same list forwarded through WhatsApp. `/paste/preview` shows what
+would change; `/paste` saves it. `action` is one of:
+
+- `receive`: purchases. Stock is added at `location_id` (default the main
+  shop). Items not in the app yet are created.
+- `transfer`: stock moves from `location_id` (default the main shop) to
+  `to_location_id`.
+- `sale`: stock is sold at `location_id`.
+
+Each line is an item and how many: `Rice 5`, `Rice - 5`, `Rice x5`,
+`5 x Rice`, `Rice 5 pcs`, or Excel cells (the first cell with letters is the
+name, the first whole number after it the quantity, so a price column further
+right is ignored). WhatsApp's `[date, time] Name:` prefix and list numbers
+like `1.` are dropped. Lines for the same item are added together.
+
+Lines that can't be used change nothing and come back in `skipped` with the
+line number and why: headings, totals, no quantity, an item that isn't in the
+app (for transfers and sales, with close names under "Did you mean"), or not
+enough stock where it is leaving from. Stock is checked again when saving, so
+nothing goes below zero. A saved paste shows in `GET /uploads` as "Pasted
+purchase", "Pasted transfer" or "Pasted sale", its sales count in
+`/reports/sales`, and low-stock alerts go out as usual.
 
 ## Importing items from a file
 
