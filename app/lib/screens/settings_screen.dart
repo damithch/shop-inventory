@@ -4,6 +4,7 @@ import '../models.dart';
 import '../session.dart';
 import '../widgets.dart';
 import 'export_screen.dart';
+import 'reset_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -63,6 +64,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: const Text('Stock at each place, or the item list'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExportScreen())),
+            ),
+            ListTile(
+              leading: const Icon(Icons.restart_alt),
+              title: const Text('Reset and delete'),
+              subtitle: const Text('Set stock to zero, delete items or a branch'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ResetScreen())),
             ),
             const Divider(),
             ListTile(

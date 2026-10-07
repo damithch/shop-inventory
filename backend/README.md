@@ -104,6 +104,31 @@ non-English letters correctly. Archived items and locations are left out.
 - All locations: one row per item with a column per location and the total.
   The Excel file also has a sheet for each location, as above.
 
+## Reset and delete
+
+For starting over or clearing out a place. Each needs the owner's password
+again in `password` (a wrong one answers `403` and doesn't sign the phone
+out). Add `"dry_run": true` to check the password and get the same summary
+without changing anything; the app does that, then saves an Excel backup,
+then runs it for real.
+
+| Endpoint                       | Body                     | Does                                          |
+|--------------------------------|--------------------------|-----------------------------------------------|
+| `POST /reset/stock`            | `location_id` (optional) | Every count at that place, or everywhere, to 0 |
+| `POST /reset/delete-item`      | `item_id`                | The item's stock everywhere to 0, then archives it |
+| `POST /reset/delete-all-items` |                          | Every item's stock to 0, then archives them all |
+| `POST /reset/delete-branch`    | `location_id`            | The branch's stock to 0, then archives it (not the main shop) |
+
+Answers `{ items, units, dry_run }` (items and units taken to zero) plus
+`location`, `item` or `deleted_items`. Nothing is wiped:
+- Each count taken away is an `adjust` movement noted "Reset to zero", so
+  item history shows what was there. Resets never raise low-stock alerts.
+- Sales history and the sales report are untouched; deleted items and
+  branches are archived, so old reports keep their names.
+- A deleted item's SKU is cleared and its other sheet names forgotten, so
+  a new item can take the SKU and name. A deleted branch is renamed
+  "Kandy Branch (deleted 2026-10-07)" so its name can be used again.
+
 ## Stock sheets uploaded from the app
 
 The app can upload a stock sheet (`.xlsx` or `.csv`), for example the shop's

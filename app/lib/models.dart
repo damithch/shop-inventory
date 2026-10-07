@@ -216,6 +216,24 @@ class LowStockEntry {
   final int threshold;
 }
 
+/// What a reset or delete took to zero (or would, on a dry run).
+class ResetResult {
+  const ResetResult({required this.items, required this.units, this.deletedItems = 0, this.dryRun = false});
+
+  factory ResetResult.fromJson(Map<String, dynamic> j) => ResetResult(
+    items: asIntOrNull(j['items']) ?? 0,
+    units: asIntOrNull(j['units']) ?? 0,
+    deletedItems: asIntOrNull(j['deleted_items']) ?? 0,
+    dryRun: j['dry_run'] == true,
+  );
+
+  /// Items whose count went to zero somewhere, and the units taken away.
+  final int items;
+  final int units;
+  final int deletedItems;
+  final bool dryRun;
+}
+
 class Movement {
   Movement({
     required this.id,

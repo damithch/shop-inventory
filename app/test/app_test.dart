@@ -466,6 +466,114 @@ void main() {
     expect(find.text('Kandy'), findsOneWidget);
     expect(backend.requests.last, 'GET /locations');
   });
+
+  group('Reset and delete', () {
+    late List<ExportFile> saved;
+    late bool saveBackup;
+
+    setUp(() {
+      saved = [];
+      saveBackup = true;
+      saveExport = (file) async {
+        if (saveBackup) saved.add(file);
+        return saveBackup;
+      };
+      addTearDown(() => saveExport = saveFileToPhone);
+    });
+
+    Future<void> openReset(WidgetTester tester) async {
+      await pumpApp(tester);
+      await signIn(tester, 'secret');
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Reset and delete'));
+      await tester.pumpAndSettle();
+    }
+
+    Finder field(String label) => find.widgetWithText(TextField, label);
+    Finder go() => find.widgetWithText(FilledButton, 'Back up and continue');
+
+    testWidgets('resets a branch only after the name, the password and a backup', (tester) async {
+      await openReset(tester);
+      await tester.tap(find.text('Reset Kandy'));
+      await tester.pumpAndSettle();
+      expect(find.text('Reset Kandy to zero?'), findsOneWidget);
+      expect(find.textContaining('1 item (4 units) at Kandy go to 0'), findsOneWidget);
+
+      // The button stays off until the name is typed and a password entered.
+      await tester.enterText(field('Type Kandy to confirm'), 'Kand');
+      await tester.enterText(field('Your password'), 'wrong');
+      await tester.pump();
+      expect(tester.widget<FilledButton>(go()).onPressed, isNull);
+
+      await tester.enterText(field('Type Kandy to confirm'), 'kandy');
+      await tester.pump();
+      await tester.tap(go());
+      await tester.pumpAndSettle();
+      expect(find.text('The password is wrong'), findsOneWidget);
+      expect(saved, isEmpty);
+      expect(backend.stock['10:2'], 4);
+
+      await tester.enterText(field('Your password'), 'secret');
+      await tester.pump();
+      await tester.tap(go());
+      await tester.pumpAndSettle();
+      expect(saved.single.name, 'stock-2.xlsx');
+      expect(backend.resets, ['/reset/stock']);
+      expect(backend.stock['10:2'], 0);
+      expect(backend.stock['10:1'], 8);
+      expect(find.text('Kandy reset: 4 units taken to zero. Backup saved as stock-2.xlsx.'), findsOneWidget);
+      // Still signed in after the wrong password.
+      expect(find.text('Reset and delete'), findsWidgets);
+    });
+
+    testWidgets('changes nothing when the backup is not saved', (tester) async {
+      saveBackup = false;
+      await openReset(tester);
+      await tester.tap(find.text('Reset every place'));
+      await tester.pumpAndSettle();
+      await tester.enterText(field('Type RESET to confirm'), 'reset');
+      await tester.enterText(field('Your password'), 'secret');
+      await tester.pump();
+      await tester.tap(go());
+      await tester.pumpAndSettle();
+      expect(find.text('No backup was saved, so nothing was changed.'), findsOneWidget);
+      expect(backend.resets, isEmpty);
+      expect(backend.stock['10:1'], 8);
+    });
+
+    testWidgets('deletes an item picked from the list', (tester) async {
+      await openReset(tester);
+      await tester.tap(find.text('Delete an item'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rice 5kg'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete Rice 5kg?'), findsOneWidget);
+      await tester.enterText(field('Type DELETE to confirm'), 'DELETE');
+      await tester.enterText(field('Your password'), 'secret');
+      await tester.pump();
+      await tester.tap(go());
+      await tester.pumpAndSettle();
+      expect(saved.single.name, 'stock-all.xlsx');
+      expect(backend.resets, ['/reset/delete-item']);
+      expect(backend.items, isEmpty);
+      expect(find.text('Rice 5kg deleted. Backup saved as stock-all.xlsx.'), findsOneWidget);
+    });
+
+    testWidgets('deletes a branch', (tester) async {
+      await openReset(tester);
+      await tester.tap(find.text('Delete Kandy'));
+      await tester.pumpAndSettle();
+      await tester.enterText(field('Type Kandy to confirm'), 'Kandy');
+      await tester.enterText(field('Your password'), 'secret');
+      await tester.pump();
+      await tester.tap(go());
+      await tester.pumpAndSettle();
+      expect(backend.resets, ['/reset/delete-branch']);
+      expect(backend.locations.map((l) => l['name']), ['Main Shop']);
+      expect(find.text('Delete Kandy'), findsNothing);
+    });
+  });
 }
 
 class FakePush implements PushService {

@@ -34,6 +34,9 @@ class FakeBackend {
   final sales = <({int item, int loc, int qty})>[];
   final uploads = <Map<String, dynamic>>[];
 
+  /// Resets and deletes done for real, by path.
+  final resets = <String>[];
+
   /// Sheet names picked for an item in an upload preview: name -> item id.
   final aliases = <String, int>{};
 
@@ -114,6 +117,7 @@ class FakeBackend {
       locations.add(loc);
       return _json(loc, 201);
     }
+    if (req.method == 'POST' && path.startsWith('/reset/')) return _reset(path, body);
     final locStock = RegExp(r'^/locations/(\d+)/stock$').firstMatch(path);
     if (req.method == 'GET' && locStock != null) {
       final id = int.parse(locStock.group(1)!);
@@ -473,5 +477,45 @@ class FakeBackend {
     };
     uploads.add(upload);
     return _json({...upload, 'alerts': raised}, 201);
+  }
+
+  /// Reset and delete: zeroes stock and drops deleted items and branches.
+  http.Response _reset(String path, Map<String, dynamic> body) {
+    if (body['password'] != password) return _error(403, 'The password is wrong');
+    final dryRun = body['dry_run'] == true;
+    bool Function(String key) where;
+    var deleted = <Map<String, dynamic>>[];
+    switch (path) {
+      case '/reset/stock':
+        final loc = body['location_id'];
+        where = (key) => loc == null || key.endsWith(':$loc');
+      case '/reset/delete-item':
+        where = (key) => key.startsWith('${body['item_id']}:');
+        deleted = items.where((i) => i['id'] == body['item_id']).toList();
+      case '/reset/delete-all-items':
+        where = (_) => true;
+        deleted = [...items];
+      case '/reset/delete-branch':
+        if (_loc(body['location_id'] as int)['type'] == 'main') return _error(400, 'The main shop cannot be deleted');
+        where = (key) => key.endsWith(':${body['location_id']}');
+      default:
+        return _error(404, 'Not found');
+    }
+    final keys = stock.keys.where((k) => where(k) && stock[k]! > 0).toList();
+    final result = {
+      'items': keys.map((k) => k.split(':').first).toSet().length,
+      'units': keys.fold<int>(0, (s, k) => s + stock[k]!),
+      if (path.contains('item')) 'deleted_items': deleted.length,
+      'dry_run': dryRun,
+    };
+    if (!dryRun) {
+      resets.add(path);
+      for (final k in keys) {
+        stock[k] = 0;
+      }
+      items.removeWhere(deleted.contains);
+      if (path == '/reset/delete-branch') locations.removeWhere((l) => l['id'] == body['location_id']);
+    }
+    return _json(result);
   }
 }
