@@ -7,7 +7,8 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
 - **Sign in**: the owner password (`ADMIN_PASSWORD` on the server). "Server address"
   under the button changes which API the app talks to; it is remembered on the phone.
 - **Main shop**: every item and how many are in the main shop. Search, filter to low
-  stock, tap an item for details. The **Stock** button adds stock, moves stock to a
+  stock, tap an item for details. Counts at or below the alert level, and every 0,
+  show in red. The **Stock** button adds stock, moves stock to a
   branch, records a sale, corrects a count, or adds a new item.
 - **Branches**: list of branches with item and unit counts; add a branch. Open one to
   see its stock, record a sale there, move stock out, rename or remove it.

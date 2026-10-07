@@ -11,6 +11,7 @@ import 'package:shop_inventory/push.dart';
 import 'package:shop_inventory/screens/export_screen.dart';
 import 'package:shop_inventory/screens/upload_screen.dart';
 import 'package:shop_inventory/session.dart';
+import 'package:shop_inventory/widgets.dart';
 
 import 'fake_backend.dart';
 
@@ -603,6 +604,18 @@ void main() {
       expect(backend.locations.map((l) => l['name']), ['Main Shop']);
       expect(find.text('Delete Kandy'), findsNothing);
     });
+  });
+
+  testWidgets('a count of 0 is red even when the item never had stock there', (tester) async {
+    Future<Color?> colorOf(QuantityBadge badge) async {
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: badge)));
+      return (tester.widget<Container>(find.byType(Container).first).decoration as BoxDecoration).color;
+    }
+
+    final scheme = ThemeData().colorScheme;
+    expect(await colorOf(const QuantityBadge(quantity: 0, low: false)), scheme.errorContainer);
+    expect(await colorOf(const QuantityBadge(quantity: 2, low: true)), scheme.errorContainer);
+    expect(await colorOf(const QuantityBadge(quantity: 9, low: false)), scheme.secondaryContainer);
   });
 }
 
