@@ -4,6 +4,16 @@ import 'dart:typed_data';
 
 int asInt(Object? v) => v is num ? v.toInt() : int.parse(v.toString());
 int? asIntOrNull(Object? v) => v == null ? null : asInt(v);
+double? asDoubleOrNull(Object? v) => v == null ? null : (v is num ? v.toDouble() : double.parse(v.toString()));
+
+/// Rupees with thousands separators and cents: 25000 -> "25,000.00".
+String formatMoney(num value) {
+  final cents = (value * 100).round();
+  final whole = (cents ~/ 100).abs().toString();
+  final grouped = whole.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+  return '${cents < 0 ? '-' : ''}$grouped.${(cents.abs() % 100).toString().padLeft(2, '0')}';
+}
+
 DateTime? asDate(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
 
 class Location {
@@ -500,6 +510,8 @@ class SaleLine {
     required this.unit,
     required this.locationName,
     required this.quantity,
+    this.locationId,
+    this.amount,
   });
 
   factory SaleLine.fromJson(Map<String, dynamic> j) => SaleLine(
@@ -508,6 +520,8 @@ class SaleLine {
     unit: (j['unit'] as String?) ?? 'pcs',
     locationName: j['location_name'] as String,
     quantity: asInt(j['quantity']),
+    locationId: asIntOrNull(j['location_id']),
+    amount: asDoubleOrNull(j['amount']),
   );
 
   final int itemId;
@@ -515,22 +529,38 @@ class SaleLine {
   final String unit;
   final String locationName;
   final int quantity;
+  final int? locationId;
+
+  /// In rupees; null when some of these units have no price.
+  final double? amount;
 }
 
 /// What sold on one day, as in GET /reports/sales.
 class SalesReport {
-  SalesReport({required this.date, required this.total, required this.items});
+  SalesReport({
+    required this.date,
+    required this.total,
+    required this.items,
+    this.totalAmount = 0,
+    this.unpricedUnits = 0,
+  });
 
   factory SalesReport.fromJson(Map<String, dynamic> j) => SalesReport(
     date: j['date'] as String,
     total: asInt(j['total']),
     items: (j['items'] as List).map((e) => SaleLine.fromJson(e as Map<String, dynamic>)).toList(),
+    totalAmount: asDoubleOrNull(j['total_amount']) ?? 0,
+    unpricedUnits: asIntOrNull(j['unpriced_units']) ?? 0,
   );
 
   /// YYYY-MM-DD in the shop's time zone.
   final String date;
   final int total;
   final List<SaleLine> items;
+
+  /// Rupees, from the units that have a price.
+  final double totalAmount;
+  final int unpricedUnits;
 }
 
 /// What a pasted list is: purchases received, a transfer, or sales.
@@ -556,6 +586,7 @@ class PasteLine {
     this.itemId,
     this.autoMatched = false,
     this.similarTo = const [],
+    this.price,
   });
 
   factory PasteLine.fromJson(Map<String, dynamic> j) => PasteLine(
@@ -568,6 +599,7 @@ class PasteLine {
     itemId: j['item_id'] == null ? null : asInt(j['item_id']),
     autoMatched: j['auto_matched'] == true,
     similarTo: [for (final s in (j['similar_to'] as List?) ?? const []) s as String],
+    price: asDoubleOrNull(j['price']),
   );
 
   final List<int> lines;
@@ -584,6 +616,9 @@ class PasteLine {
   /// it to that item by itself ("Floriana" is RAYHAAN FLORIANA).
   final bool autoMatched;
   final List<String> similarTo;
+
+  /// For sales: the item's price in rupees, if it has one.
+  final double? price;
 }
 
 class PastePreview {
@@ -623,7 +658,7 @@ enum ExportFormat {
   final String label;
 }
 
-/// A spreadsheet downloaded from the server, ready to share or save.
+/// A file downloaded from the server (spreadsheet or PDF), ready to share or save.
 class ExportFile {
   const ExportFile({required this.name, required this.bytes, required this.mimeType});
 

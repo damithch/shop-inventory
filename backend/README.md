@@ -47,12 +47,12 @@ All endpoints except `/health` and `/auth/login` need `Authorization: Bearer <to
 | PATCH | `/locations/:id` | `{ name?, archived? }` | |
 | GET | `/locations/:id/stock` | | Every item's quantity, alert level and `low` flag there |
 | GET | `/items` | `?q=search&include_archived=true` | With `main_quantity` and `total_quantity` |
-| POST | `/items` | `{ name, sku?, unit? }` | |
+| POST | `/items` | `{ name, sku?, unit?, price? }` | `price` is the selling price in rupees, optional |
 | GET | `/items/:id` | | Item with its stock at every location |
-| PATCH | `/items/:id` | `{ name?, sku?, unit?, archived? }` | |
+| PATCH | `/items/:id` | `{ name?, sku?, unit?, price?, archived? }` | `price: null` clears it |
 | POST | `/stock/receive` | `{ item_id, quantity, location_id?, note? }` | |
 | POST | `/stock/transfer` | `{ item_id, to_location_id, quantity, from_location_id?, note? }` | From the main shop unless `from_location_id` is given |
-| POST | `/stock/sale` | `{ item_id, location_id, quantity, note? }` | |
+| POST | `/stock/sale` | `{ item_id, location_id, quantity, unit_price?, note? }` | Without `unit_price`, the item's price is kept with the sale |
 | POST | `/stock/adjust` | `{ item_id, location_id, new_quantity, note? }` | |
 | PUT | `/stock/threshold` | `{ item_id, location_id, threshold }` | `threshold: null` goes back to the default |
 | GET | `/stock/low` | `?location_id=` | Everything at or below its alert level |
@@ -64,11 +64,12 @@ All endpoints except `/health` and `/auth/login` need `Authorization: Bearer <to
 | POST | `/uploads/preview` | file as the body, `?filename=&location_id=&matches=` | What a stock sheet would change; saves nothing |
 | POST | `/uploads` | same | Saves the stock sheet (see below) |
 | GET | `/uploads` | `?limit=` | Past uploads with their summary |
-| POST | `/paste/preview` | `{ action, text, location_id?, to_location_id?, matches?, no_match? }` | What a pasted list would change; saves nothing |
+| POST | `/paste/preview` | `{ action, text, location_id?, to_location_id?, matches?, no_match?, prices? }` | What a pasted list would change; saves nothing |
 | POST | `/paste` | same | Saves the pasted list (see below) |
 | GET | `/exports/stock` | `?location_id=&format=xlsx\|csv` | Stock at one location, or every location without `location_id` (see below) |
 | GET | `/exports/items` | `?format=xlsx\|csv` | Every item with its total stock and the date it was added |
-| GET | `/reports/sales` | `?date=YYYY-MM-DD&location_id=` | What sold that day (default today), per item and location |
+| GET | `/reports/sales` | `?date=YYYY-MM-DD&location_id=` | What sold that day (default today), per item and location, with rupee totals |
+| GET | `/reports/sales/pdf` | same | The same report as a PDF (see below) |
 
 Stock endpoints return `{ movement, levels, alerts }` so the app can update its
 screen and show any alert straight away.
@@ -199,6 +200,29 @@ enough stock where it is leaving from. Stock is checked again when saving, so
 nothing goes below zero. A saved paste shows in `GET /uploads` as "Pasted
 purchase", "Pasted transfer" or "Pasted sale", its sales count in
 `/reports/sales`, and low-stock alerts go out as usual.
+
+## Prices and the end-of-day report
+
+Items can have a selling price in rupees (`price`, optional). Each sale keeps
+the price it was sold at (`stock_movements.unit_price`), so changing a price
+later doesn't change past days' totals. A sale recorded without a price
+takes the item's price at that moment; sales recorded before prices existed
+use the item's current price in reports.
+
+A pasted sale can carry `prices: { "<item_id>": 2450 }` (or `null` for no
+price). Preview lines then have `price`, and the summary has `amount` (rupees
+for the priced lines) and `unpriced_units`. Saving keeps those prices on the
+sales and remembers them as the items' prices. The app's **End of day sales**
+uses this for one branch's WhatsApp list.
+
+`/reports/sales` gives each line `amount` and `unit_price` (null when some
+of its units have no price), plus `total_amount` and `unpriced_units`.
+`/reports/sales/pdf` is the same report as an A4 PDF, named like
+`sales-kandy-branch-2026-10-07.pdf`: the place and date, items, units and
+total in LKR, and a table of what sold (one section per place when it's for
+all places). Price columns are left out when nothing has a price. It uses the
+PDF's built-in Helvetica font, so letters outside English (Sinhala, Tamil)
+show as `?`.
 
 ## Importing items from a file
 

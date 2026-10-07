@@ -5,6 +5,7 @@ import '../session.dart';
 import '../widgets.dart';
 import 'item_detail_screen.dart';
 import 'paste_screen.dart';
+import 'sales_pdf_sheet.dart';
 import 'upload_screen.dart';
 
 String _isoDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -50,6 +51,12 @@ class _SalesScreenState extends State<SalesScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
+              leading: const Icon(Icons.point_of_sale),
+              title: const Text('End of day sales'),
+              subtitle: const Text('A branch\'s sold items from WhatsApp, with the day\'s total and a PDF'),
+              onTap: () => Navigator.pop(context, const PasteScreen(endOfDay: true)),
+            ),
+            ListTile(
               leading: const Icon(Icons.content_paste),
               title: const Text('Paste list'),
               subtitle: const Text('Purchases, transfers or sales copied from Excel or WhatsApp'),
@@ -70,6 +77,15 @@ class _SalesScreenState extends State<SalesScreen> {
     if (saved == true) _loader.currentState?.reload();
   }
 
+  /// The last report shown, so the PDF button knows the day and place.
+  SalesReport? _shown;
+
+  void _pdf() {
+    final report = _shown;
+    final location = report?.items.where((s) => s.locationName == _location).firstOrNull?.locationId;
+    showSalesPdfSheet(context, date: report?.date ?? (_day == null ? null : _isoDate(_day!)), locationId: location);
+  }
+
   @override
   Widget build(BuildContext context) {
     final api = SessionScope.apiOf(context);
@@ -77,6 +93,7 @@ class _SalesScreenState extends State<SalesScreen> {
       appBar: AppBar(
         title: const Text('Sales'),
         actions: [
+          IconButton(tooltip: 'PDF report', icon: const Icon(Icons.picture_as_pdf_outlined), onPressed: _pdf),
           IconButton(
             tooltip: 'Past uploads',
             icon: const Icon(Icons.history),
@@ -93,6 +110,7 @@ class _SalesScreenState extends State<SalesScreen> {
         key: _loader,
         load: () => api.sales(date: _day == null ? null : _isoDate(_day!)),
         builder: (context, report, _) {
+          _shown = report;
           final shown = DateTime.parse(report.date);
           final byLocation = <String, int>{};
           for (final s in report.items) {
@@ -101,6 +119,7 @@ class _SalesScreenState extends State<SalesScreen> {
           final location = byLocation.containsKey(_location) ? _location : null;
           final lines = report.items.where((s) => location == null || s.locationName == location).toList();
           final total = location == null ? report.total : byLocation[location]!;
+          final amount = lines.fold<double>(0, (t, s) => t + (s.amount ?? 0));
           return ListView(
             padding: const EdgeInsets.only(bottom: 96),
             children: [
@@ -151,6 +170,11 @@ class _SalesScreenState extends State<SalesScreen> {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
+              if (amount > 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text('LKR ${formatMoney(amount)}', style: Theme.of(context).textTheme.titleMedium),
+                ),
               if (report.items.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(32),
@@ -163,7 +187,15 @@ class _SalesScreenState extends State<SalesScreen> {
                 ListTile(
                   title: Text(s.itemName),
                   subtitle: Text(s.locationName),
-                  trailing: Text('${s.quantity} ${s.unit}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  trailing: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('${s.quantity} ${s.unit}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                      if (s.amount != null)
+                        Text('LKR ${formatMoney(s.amount!)}', style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
                   onTap: () =>
                       Navigator.push(context, MaterialPageRoute(builder: (_) => ItemDetailScreen(itemId: s.itemId))),
                 ),

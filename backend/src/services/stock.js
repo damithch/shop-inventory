@@ -8,7 +8,7 @@ async function getDefaultThreshold(client = db) {
 }
 
 async function getItem(client, itemId) {
-  const { rows } = await client.query('SELECT id, name, archived FROM items WHERE id = $1', [itemId]);
+  const { rows } = await client.query('SELECT id, name, archived, price FROM items WHERE id = $1', [itemId]);
   if (!rows.length) throw notFound(`Item ${itemId} not found`);
   if (rows[0].archived) throw badRequest(`Item "${rows[0].name}" is archived`);
   return rows[0];
@@ -74,11 +74,13 @@ async function recordAlert(client, item, location, quantity, threshold) {
   };
 }
 
-async function insertMovement(client, { itemId, type, quantity, fromId = null, toId = null, note = null, uploadId = null }) {
+async function insertMovement(client, {
+  itemId, type, quantity, fromId = null, toId = null, note = null, uploadId = null, unitPrice = null,
+}) {
   const { rows } = await client.query(
-    `INSERT INTO stock_movements (item_id, type, quantity, from_location_id, to_location_id, note, upload_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [itemId, type, quantity, fromId, toId, note, uploadId],
+    `INSERT INTO stock_movements (item_id, type, quantity, from_location_id, to_location_id, note, upload_id, unit_price)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [itemId, type, quantity, fromId, toId, note, uploadId, unitPrice],
   );
   return rows[0];
 }
@@ -151,12 +153,15 @@ function transfer(args) {
 
 // Records a sale inside an existing transaction (used by stock sheet uploads
 // too). Returns any low-stock alert in alerts; the caller sends it after commit.
-async function saleIn(client, { itemId, locationId, quantity, note, uploadId }) {
+// The sale keeps unitPrice, or the item's price when it is left out (undefined).
+async function saleIn(client, { itemId, locationId, quantity, note, uploadId, unitPrice }) {
   const item = await getItem(client, itemId);
   const location = await getLocation(client, locationId);
   const level = await lockLevel(client, item.id, location.id);
   const alert = await applyDelta(client, item, location, level, -quantity, await getDefaultThreshold(client));
-  const movement = await insertMovement(client, { itemId: item.id, type: 'sale', quantity, fromId: location.id, note, uploadId });
+  const movement = await insertMovement(client, {
+    itemId: item.id, type: 'sale', quantity, fromId: location.id, note, uploadId, unitPrice: unitPrice === undefined ? item.price : unitPrice,
+  });
   return { movement, levels: await levelsFor(client, item.id, [location.id]), alerts: alert ? [alert] : [] };
 }
 

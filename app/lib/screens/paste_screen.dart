@@ -4,15 +4,20 @@ import 'package:flutter/services.dart';
 import '../models.dart';
 import '../session.dart';
 import '../widgets.dart';
+import 'sales_pdf_sheet.dart';
 import 'upload_screen.dart' show PickedMatch, pickExistingItem;
 
 /// Paste a list copied from Excel or WhatsApp: purchases received, stock moved
 /// between places (a bulk move), or sales. Check the preview, then save.
 /// Pops with true once saved.
+///
+/// With [endOfDay], it is a branch's sales for the day: prices can be filled
+/// in to total the day in rupees, and saving offers the day's PDF report.
 class PasteScreen extends StatefulWidget {
-  const PasteScreen({super.key, this.action = PasteAction.receive, this.fromLocationId});
+  const PasteScreen({super.key, this.action = PasteAction.receive, this.fromLocationId, this.endOfDay = false});
 
   final PasteAction action;
+  final bool endOfDay;
 
   /// Where stock leaves for a move, or is sold: the place the user came from.
   final int? fromLocationId;
@@ -24,7 +29,11 @@ class PasteScreen extends StatefulWidget {
 class _PasteScreenState extends State<PasteScreen> {
   final _text = TextEditingController();
   List<Location>? _locations;
-  late PasteAction _action = widget.action;
+  late PasteAction _action = widget.endOfDay ? PasteAction.sale : widget.action;
+
+  /// Prices typed in for this sale, by item id (null: no price). Saving
+  /// remembers them as the items' prices.
+  final _prices = <int, double?>{};
 
   /// Pasted names the user said are an item already in the app.
   final _matches = <String, PickedMatch>{};
@@ -176,6 +185,18 @@ class _PasteScreenState extends State<PasteScreen> {
     await _check();
   }
 
+  /// Only sales carry prices.
+  Map<int, double?> get _sendPrices => _action == PasteAction.sale ? _prices : const {};
+
+  Future<void> _setPrice(PasteLine line) async {
+    final itemId = line.itemId;
+    if (itemId == null) return;
+    final current = _prices.containsKey(itemId) ? _prices[itemId] : line.price;
+    final result = await askPrice(context, itemName: line.itemName, current: current);
+    if (result == null || !mounted) return;
+    setState(() => _prices[itemId] = result.price);
+  }
+
   int? get _locationId => _action == PasteAction.receive ? _to : _from;
   int? get _toLocationId => _action == PasteAction.transfer ? _to : null;
 
@@ -194,6 +215,7 @@ class _PasteScreenState extends State<PasteScreen> {
         toLocationId: _toLocationId,
         matches: _matchIds,
         noMatch: _noMatch,
+        prices: _sendPrices,
       );
       if (mounted) setState(() => _preview = preview);
     } catch (e) {
@@ -213,9 +235,17 @@ class _PasteScreenState extends State<PasteScreen> {
         toLocationId: _toLocationId,
         matches: _matchIds,
         noMatch: _noMatch,
+        prices: _sendPrices,
       );
       if (!mounted) return;
       final s = result.summary;
+      if (widget.endOfDay) {
+        await showStockAlerts(context, result.alerts);
+        if (!mounted) return;
+        await showSalesPdfSheet(context, locationId: _from, title: 'Saved: ${s.sold} sold');
+        if (mounted) Navigator.pop(context, true);
+        return;
+      }
       showMessage(context, switch (_action) {
         PasteAction.receive => 'Saved: ${s.received} received',
         PasteAction.transfer => 'Saved: ${s.transferred} moved',
@@ -246,20 +276,30 @@ class _PasteScreenState extends State<PasteScreen> {
     final preview = _preview;
     final canSave = preview != null && preview.lines.isNotEmpty;
     return Scaffold(
-      appBar: AppBar(title: const Text('Paste list')),
+      appBar: AppBar(title: Text(widget.endOfDay ? 'End of day sales' : 'Paste list')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          SegmentedButton<PasteAction>(
-            segments: [for (final a in PasteAction.values) ButtonSegment(value: a, label: Text(a.label))],
-            selected: {_action},
-            onSelectionChanged: _busy
-                ? null
-                : (s) => _changed(() {
-                    _action = s.single;
-                    if (locations != null) _setDefaults();
-                  }),
-          ),
+          if (widget.endOfDay)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'Pick the branch, paste what it sold today (the WhatsApp message as it is), '
+                'then check the list. Add prices to see the day\'s total in rupees.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            )
+          else
+            SegmentedButton<PasteAction>(
+              segments: [for (final a in PasteAction.values) ButtonSegment(value: a, label: Text(a.label))],
+              selected: {_action},
+              onSelectionChanged: _busy
+                  ? null
+                  : (s) => _changed(() {
+                      _action = s.single;
+                      if (locations != null) _setDefaults();
+                    }),
+            ),
           const SizedBox(height: 16),
           if (locations != null)
             ...switch (_action) {
@@ -269,7 +309,7 @@ class _PasteScreenState extends State<PasteScreen> {
                 const SizedBox(height: 12),
                 _place('To', _to, (id) => _to = id),
               ],
-              PasteAction.sale => [_place('Sold at', _from, (id) => _from = id)],
+              PasteAction.sale => [_place(widget.endOfDay ? 'Branch' : 'Sold at', _from, (id) => _from = id)],
             },
           const SizedBox(height: 12),
           TextField(
@@ -321,6 +361,8 @@ class _PasteScreenState extends State<PasteScreen> {
               decided: _decided,
               onPick: _busy ? null : _pickMatch,
               onUnmatch: _busy ? null : _unmatch,
+              prices: _action == PasteAction.sale ? _prices : null,
+              onPrice: _busy || _action != PasteAction.sale ? null : _setPrice,
             ),
         ],
       ),
@@ -347,9 +389,15 @@ class _PastePreviewView extends StatelessWidget {
     this.decided = const {},
     this.onPick,
     this.onUnmatch,
+    this.prices,
+    this.onPrice,
   });
 
   final PasteAction action;
+
+  /// For sales: prices typed in, by item id, over each line's saved price.
+  final Map<int, double?>? prices;
+  final ValueChanged<PasteLine>? onPrice;
   final PastePreview preview;
   final Map<String, PickedMatch> matches;
   final Set<String> decided;
@@ -372,6 +420,11 @@ class _PastePreviewView extends StatelessWidget {
       PasteAction.sale => '$units sold at ${preview.fromName}',
     };
     final sign = action == PasteAction.receive ? '+' : '−';
+    double? priceOf(PasteLine l) =>
+        prices != null && l.itemId != null && prices!.containsKey(l.itemId) ? prices![l.itemId] : l.price;
+    final priced = preview.lines.where((l) => priceOf(l) != null);
+    final amount = priced.fold<double>(0, (t, l) => t + l.quantity * priceOf(l)!);
+    final unpriced = units - priced.fold<int>(0, (t, l) => t + l.quantity);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -385,6 +438,14 @@ class _PastePreviewView extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(headline),
                 Text('${preview.lines.length} items'),
+                if (prices != null && priced.isNotEmpty)
+                  Text('Total LKR ${formatMoney(amount)}', style: theme.textTheme.titleMedium),
+                if (prices != null && unpriced > 0)
+                  Text(
+                    priced.isEmpty
+                        ? 'No prices yet. Tap an item\'s price to add one, or save the quantities only.'
+                        : '$unpriced units have no price and are not in the total',
+                  ),
                 if (s.newItems > 0) Text('${s.newItems} new items will be added'),
                 if (preview.skipped.isNotEmpty) Text('${preview.skipped.length} lines can\'t be used'),
               ],
@@ -487,11 +548,88 @@ class _PastePreviewView extends StatelessWidget {
                             ? null
                             : TextStyle(color: theme.colorScheme.error),
                       ),
-                trailing: Text('$sign${l.quantity}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                trailing: onPrice == null || l.itemId == null
+                    ? Text('$sign${l.quantity}', style: const TextStyle(fontWeight: FontWeight.w600))
+                    : _PriceButton(
+                        quantity: l.quantity,
+                        price: priceOf(l),
+                        itemName: l.itemName,
+                        onPressed: () => onPrice!(l),
+                      ),
               ),
           ],
         ),
       ],
     );
   }
+}
+
+/// A sold line's quantity and price; tap to set the price.
+class _PriceButton extends StatelessWidget {
+  const _PriceButton({required this.quantity, required this.price, required this.itemName, required this.onPressed});
+
+  final int quantity;
+  final double? price;
+  final String itemName;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = price;
+    return Tooltip(
+      message: 'Price of $itemName',
+      child: TextButton(
+        onPressed: onPressed,
+        child: Text(
+          p == null ? '−$quantity · Add price' : '−$quantity × ${formatMoney(p)}',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+}
+
+/// Asks for an item's price in rupees. Returns null if cancelled; the
+/// result's price is null when the price was cleared.
+Future<({double? price})?> askPrice(BuildContext context, {required String itemName, double? current}) {
+  final controller = TextEditingController(text: current == null ? '' : _plain(current));
+  final form = GlobalKey<FormState>();
+  return showDialog<({double? price})>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Price of $itemName'),
+      content: Form(
+        key: form,
+        child: TextFormField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(labelText: 'Price for one (LKR)', prefixText: 'Rs '),
+          validator: (v) => v == null || v.trim().isEmpty || parsePrice(v) != null ? null : 'Enter a price like 1500',
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        if (current != null)
+          TextButton(onPressed: () => Navigator.pop(context, (price: null)), child: const Text('No price')),
+        FilledButton(
+          onPressed: () {
+            if (!form.currentState!.validate()) return;
+            final text = controller.text.trim();
+            Navigator.pop(context, (price: text.isEmpty ? null : parsePrice(text)));
+          },
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  );
+}
+
+String _plain(double v) => v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(2);
+
+/// "1,500" or "1499.50" as a number of rupees, or null if it isn't a price.
+double? parsePrice(String text) {
+  final t = text.trim().replaceAll(',', '');
+  if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(t)) return null;
+  return double.parse(t);
 }

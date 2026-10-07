@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const db = require('../db');
 const stock = require('../services/stock');
-const { badRequest, positiveInt, nonNegativeInt, optionalString } = require('../errors');
+const { badRequest, positiveInt, nonNegativeInt, optionalString, optionalPrice } = require('../errors');
 
 const router = Router();
 
@@ -40,6 +40,7 @@ router.post('/sale', async (req, res) => {
     locationId: positiveInt(b.location_id, 'location_id'),
     quantity: positiveInt(b.quantity, 'quantity'),
     note: optionalString(b.note),
+    unitPrice: b.unit_price === undefined ? undefined : optionalPrice(b.unit_price, 'unit_price'),
   });
   res.status(201).json(result);
 });

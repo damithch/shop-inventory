@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { badRequest, positiveInt } = require('../errors');
+const { badRequest, positiveInt, optionalPrice } = require('../errors');
 const { notifyLowStock } = require('../services/notifier');
 const { loadContext } = require('../import/items');
 const { normalize } = require('../import/items');
@@ -10,7 +10,7 @@ const router = express.Router();
 
 const LABELS = { receive: 'Pasted purchase', transfer: 'Pasted transfer', sale: 'Pasted sale' };
 
-// Body: { action: receive | transfer | sale, text, location_id, to_location_id, matches }.
+// Body: { action: receive | transfer | sale, text, location_id, to_location_id, matches, prices }.
 // receive: stock arrives at location_id (default the main shop).
 // transfer: stock moves from location_id (default the main shop) to
 //   to_location_id, or to the place a line of the list names ("Dehiwela").
@@ -37,6 +37,17 @@ async function plan(body = {}) {
       throw badRequest('no_match must be a list of pasted names');
     }
     for (const name of body.no_match) noMatch.add(normalize(name));
+  }
+
+  // prices: { item_id: price or null } for a sale; typed-in prices are
+  // remembered as the item's price.
+  const prices = new Map();
+  if (body.prices !== undefined) {
+    if (action !== 'sale') throw badRequest('Prices can only be given for sales');
+    if (typeof body.prices !== 'object' || body.prices === null || Array.isArray(body.prices)) {
+      throw badRequest('prices must map item ids to prices');
+    }
+    for (const [id, price] of Object.entries(body.prices)) prices.set(positiveInt(id, 'prices'), optionalPrice(price, 'Price'));
   }
 
   const parsed = parsePaste(text);
@@ -70,18 +81,18 @@ async function plan(body = {}) {
     const place = s.reason === 'no quantity on this line' && namedLocation(s.text, context.locations);
     if (place) s.reason = `place name (${place.name})`;
   }
-  return planPaste(action, parsed, context, { from, to, matches, noMatch });
+  return { planned: planPaste(action, parsed, context, { from, to, matches, noMatch, prices }), prices };
 }
 
 // What saving the pasted list would do. Saves nothing.
 router.post('/preview', async (req, res) => {
-  res.json(await plan(req.body));
+  res.json((await plan(req.body)).planned);
 });
 
 // Saves the pasted list. Stock is checked again at this moment, so lines that
 // no longer have enough stock are skipped, never taken below zero.
 router.post('/', async (req, res) => {
-  const planned = await plan(req.body);
+  const { planned, prices } = await plan(req.body);
   if (!planned.lines.length) throw badRequest('None of the pasted lines can be saved');
   const place = (planned.action === 'sale' ? planned.from : planned.to).location_name;
   const filename = `${LABELS[planned.action]} (${planned.from && planned.to ? `${planned.from.location_name} → ` : ''}${place})`;
@@ -89,7 +100,7 @@ router.post('/', async (req, res) => {
     const { rows } = await client.query(
       'INSERT INTO stock_uploads (filename, summary) VALUES ($1, $2) RETURNING *', [filename, planned.summary],
     );
-    const raised = await applyPaste(client, planned, { note: filename, uploadId: rows[0].id });
+    const raised = await applyPaste(client, planned, { note: filename, uploadId: rows[0].id, prices });
     return { upload: rows[0], alerts: raised };
   });
   await notifyLowStock(alerts);

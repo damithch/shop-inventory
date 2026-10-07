@@ -30,8 +30,11 @@ class FakeBackend {
   /// Push tokens registered with POST /devices.
   final devices = <String>{};
 
-  /// Sales for GET /reports/sales: item, location and quantity.
-  final sales = <({int item, int loc, int qty})>[];
+  /// Sales for GET /reports/sales: item, location, quantity and unit price.
+  final sales = <({int item, int loc, int qty, double? price})>[];
+
+  /// Query of each PDF report downloaded.
+  final pdfs = <Map<String, String>>[];
   final uploads = <Map<String, dynamic>>[];
 
   /// Resets and deletes done for real, by path.
@@ -90,6 +93,16 @@ class FakeBackend {
       password = body['new_password'] as String;
       token = '${token}2';
       return _json({'token': token, 'expires_in': '30d'});
+    }
+    if (req.method == 'GET' && path == '/reports/sales/pdf') {
+      final q = req.url.queryParameters;
+      pdfs.add(q);
+      final name = 'sales-${q['location_id'] ?? 'all'}-${q['date'] ?? '2026-10-06'}.pdf';
+      return http.Response.bytes(
+        utf8.encode('%PDF-1.7 fake'),
+        200,
+        headers: {'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="$name"'},
+      );
     }
     if (req.method == 'GET' && path.startsWith('/exports/')) {
       final format = req.url.queryParameters['format'];
@@ -200,7 +213,7 @@ class FakeBackend {
       final qty = body['quantity'] as int;
       if (_qty(item, loc) < qty) return _error(409, 'Not enough "${_item(item)['name']}" at ${_loc(loc)['name']}');
       final alert = _change(item, loc, -qty);
-      sales.add((item: item, loc: loc, qty: qty));
+      sales.add((item: item, loc: loc, qty: qty, price: null));
       return _json({
         'movement': {},
         'levels': [],
@@ -238,6 +251,8 @@ class FakeBackend {
       return _json({
         'date': req.url.queryParameters['date'] ?? '2026-10-06',
         'total': sales.fold<int>(0, (t, s) => t + s.qty),
+        'total_amount': sales.fold<double>(0, (t, s) => t + s.qty * (s.price ?? 0)),
+        'unpriced_units': sales.where((s) => s.price == null).fold<int>(0, (t, s) => t + s.qty),
         'items': [
           for (final s in sales)
             {
@@ -247,6 +262,7 @@ class FakeBackend {
               'location_id': s.loc,
               'location_name': _loc(s.loc)['name'],
               'quantity': s.qty,
+              'amount': s.price == null ? null : s.qty * s.price!,
             },
         ],
       });
@@ -327,7 +343,7 @@ class FakeBackend {
       });
       if (qty < from) {
         sold += from - qty;
-        if (save) sales.add((item: id, loc: loc, qty: from - qty));
+        if (save) sales.add((item: id, loc: loc, qty: from - qty, price: null));
       } else {
         received += qty - from;
       }
@@ -374,6 +390,7 @@ class FakeBackend {
     if (action == 'transfer' && to == null) return _error(400, 'Choose where the stock is going');
     final lines = <Map<String, dynamic>>[];
     final skipped = <Map<String, dynamic>>[];
+    final prices = (body['prices'] as Map<String, dynamic>?) ?? const {};
     final rows = (body['text'] as String).split('\n');
     for (var i = 0; i < rows.length; i++) {
       final m = RegExp(r'^(.*\S)\s+(\d+)$').firstMatch(rows[i].trim());
@@ -428,6 +445,7 @@ class FakeBackend {
           'new_item': item == null,
           'auto_matched': auto != null,
           'similar_to': <String>[],
+          if (action == 'sale') 'price': prices.containsKey('${item!['id']}') ? prices['${item['id']}'] : item['price'],
         });
       }
     }
@@ -467,7 +485,11 @@ class FakeBackend {
         if (alert != null) raised.add(alert);
       }
       if (to != null) _change(id, to, qty);
-      if (action == 'sale') sales.add((item: id, loc: from!, qty: qty));
+      if (action == 'sale') {
+        final price = (l['price'] as num?)?.toDouble();
+        sales.add((item: id, loc: from!, qty: qty, price: price));
+        if (prices.containsKey('$id')) _item(id)['price'] = price;
+      }
     }
     final upload = {
       'id': uploads.length + 1,
