@@ -74,11 +74,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.password),
-              title: const Text('Change password'),
-              onTap: () => showDialog<void>(context: context, builder: (_) => const ChangePasswordDialog()),
-            ),
-            ListTile(
               leading: const Icon(Icons.dns_outlined),
               title: const Text('Server'),
               subtitle: Text(session.baseUrl),
@@ -87,95 +82,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Asks for the current password and a new one (twice), then changes it.
-/// Other phones are signed out; this one stays signed in.
-class ChangePasswordDialog extends StatefulWidget {
-  const ChangePasswordDialog({super.key});
-
-  @override
-  State<ChangePasswordDialog> createState() => _ChangePasswordDialogState();
-}
-
-class _ChangePasswordDialogState extends State<ChangePasswordDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _current = TextEditingController();
-  final _next = TextEditingController();
-  final _repeat = TextEditingController();
-  bool _busy = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _current.dispose();
-    _next.dispose();
-    _repeat.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await SessionScope.read(context).changePassword(current: _current.text, next: _next.text);
-      if (!mounted) return;
-      Navigator.pop(context);
-      showMessage(context, 'Password changed. Other phones need to sign in again.');
-    } catch (e) {
-      if (mounted) setState(() => _error = '$e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Change password'),
-      content: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _current,
-                obscureText: true,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: 'Current password'),
-                validator: (v) => (v ?? '').isEmpty ? 'Enter your current password' : null,
-              ),
-              TextFormField(
-                controller: _next,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'New password'),
-                validator: (v) => (v ?? '').length < 6 ? 'At least 6 characters' : null,
-              ),
-              TextFormField(
-                controller: _repeat,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'New password again'),
-                validator: (v) => v != _next.text ? 'The new passwords are different' : null,
-              ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: _busy ? null : () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(onPressed: _busy ? null : _save, child: const Text('Change')),
-      ],
     );
   }
 }
