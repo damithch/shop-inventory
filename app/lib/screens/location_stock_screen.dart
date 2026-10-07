@@ -5,6 +5,7 @@ import '../session.dart';
 import '../widgets.dart';
 import 'item_detail_screen.dart';
 import 'new_item_screen.dart';
+import 'paste_screen.dart';
 import 'stock_action_screen.dart';
 
 /// Every item's count at one location (the main shop or a branch), with the
@@ -85,6 +86,16 @@ class _LocationStockScreenState extends State<LocationStockScreen> {
     _ActionTile(Icons.point_of_sale, 'Record sale', () => _openAction(StockAction.sale)),
     if (!_location.isMain)
       _ActionTile(Icons.local_shipping_outlined, 'Move stock from here', () => _openAction(StockAction.transfer)),
+    _ActionTile(
+      Icons.playlist_play,
+      'Move a list of items',
+      () => _open(PasteScreen(action: PasteAction.transfer, fromLocationId: _location.id)),
+    ),
+    _ActionTile(
+      Icons.receipt_long_outlined,
+      'Record sales from a list',
+      () => _open(PasteScreen(action: PasteAction.sale, fromLocationId: _location.id)),
+    ),
     _ActionTile(Icons.fact_check_outlined, 'Correct a count', () => _openAction(StockAction.adjust)),
     if (_location.isMain) _ActionTile(Icons.playlist_add, 'New item', () => _open(const NewItemScreen())),
   ];

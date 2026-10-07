@@ -104,6 +104,37 @@ test('matches names ignoring spacing and flags look-alike new items', async () =
   assert.deepEqual(res.new_items.map((i) => [i.name, i.similar_to]), [['HAWAS ICE', ['RASASI HAWAS ICE 100 ML']]]);
 });
 
+test('a matching item picked in the preview is remembered for later sheets and pastes', async () => {
+  await upload('/uploads', 'shop.csv', 'Item,Qty\nRASASI HAWAS ICE 100 ML,0\nRASASI HAWAS 100 ML,0\nAFNAN 9 AM,0\n');
+  const hawas = await itemByName('RASASI HAWAS ICE 100 ML');
+  const sheet = 'Item,Qty\nHAWAS ICE,6\nAFNAN 9AM,2\nRASASI HAWAS ICE 100 ML,1\n';
+
+  const before = (await upload('/uploads/preview', 'home.csv', sheet)).body;
+  assert.deepEqual(before.new_items.map((i) => [i.row, i.similar_ids[0]]), [[2, hawas.id]]);
+
+  // Row 2 picked as the shop item; the sheet also lists that item on row 4.
+  const picked = (await upload('/uploads/preview', 'home.csv', sheet, { matches: `2:${hawas.id}` })).body;
+  assert.equal(picked.new_items.length, 0);
+  assert.deepEqual(picked.changes.map((c) => [c.sheet_name, c.item_name, c.to]), [
+    ['HAWAS ICE', 'RASASI HAWAS ICE 100 ML', 6], ['AFNAN 9AM', 'AFNAN 9 AM', 2],
+  ]);
+  assert.match(picked.skipped[0].reason, /already on row 2/);
+
+  assert.equal((await upload('/uploads', 'home.csv', sheet, { matches: `2:${hawas.id}` })).status, 201);
+  assert.equal((await itemByName('RASASI HAWAS ICE 100 ML')).main_quantity, 6);
+  assert.equal((await api.get('/items')).body.length, 3);
+
+  // The next home sheet and a pasted list match "HAWAS ICE" by themselves.
+  const next = (await upload('/uploads/preview', 'home.csv', 'Item,Qty\nHawas Ice,4\n')).body;
+  assert.deepEqual(next.changes.map((c) => [c.item_name, c.from, c.to]), [['RASASI HAWAS ICE 100 ML', 6, 4]]);
+  const pasted = (await api.post('/paste/preview', { action: 'transfer', text: 'HAWAS ICE 2', to_location_id: branchId })).body;
+  assert.deepEqual(pasted.lines.map((l) => [l.item_name, l.quantity]), [['RASASI HAWAS ICE 100 ML', 2]]);
+
+  assert.equal((await upload('/uploads/preview', 'home.csv', sheet, { matches: 'row2' })).status, 400);
+  const missing = (await upload('/uploads/preview', 'home.csv', sheet, { matches: '2:999' })).body;
+  assert.match(missing.skipped[0].reason, /not in the app/);
+});
+
 test('a plain quantity column can be for a branch', async () => {
   const res = await upload('/uploads', 'home.csv', 'Item,Qty\nRice,4\n', { location_id: branchId });
   assert.equal(res.status, 201);

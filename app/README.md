@@ -11,6 +11,10 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
   branch, records a sale, corrects a count, or adds a new item.
 - **Branches**: list of branches with item and unit counts; add a branch. Open one to
   see its stock, record a sale there, move stock out, rename or remove it.
+  From any place (the main shop too), **Stock > Move a list of items** pastes a
+  list to move in one go; a line naming a branch ("Dehiwela") picks where it
+  goes. **Record sales from a list** does the same for sales. Tap a name the
+  app doesn't know to pick the item it is; the app remembers it.
 - **Item**: stock at every location, total, recent changes. Tap a location to set the
   alert level for that item there (or go back to the default).
 - **Low stock**: everything at or below its alert level, with a one-tap refill from
@@ -19,7 +23,9 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
   picker to change the day. **Add list** > **Upload stock sheet** picks an Excel (.xlsx) or
   CSV stock count from the phone and the location it's for, shows what would
   change (new items, sold, received, rows that can't be used, new items that
-  look like existing ones), and saves it on **Save**. Upload the shop's count
+  look like existing ones), and saves it on **Save**. Tap a new item to say
+  which item already in the app it is ("HAWAS ICE" is "RASASI HAWAS ICE 100 ML");
+  the app remembers it for later sheets and pasted lists. Upload the shop's count
   each evening: drops since the last count are recorded as sales. Past uploads
   are under the history button. **Add list** > **Paste list** takes a list copied from Excel
   or WhatsApp: choose Purchase (stock added at Home), Transfer (from Home to

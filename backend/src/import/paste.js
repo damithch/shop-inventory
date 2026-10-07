@@ -2,7 +2,7 @@
 // through WhatsApp): purchases received, transfers between locations, and
 // sales. Each line is an item and how many. Reading and planning touch
 // nothing; only applyPaste writes, inside the caller's transaction.
-const { normalize } = require('./items');
+const { normalize, saveAlias } = require('./items');
 const { receiveIn, transferIn, saleIn } = require('../services/stock');
 
 const ACTIONS = ['receive', 'transfer', 'sale'];
@@ -87,48 +87,75 @@ function distance(a, b) {
 
 // Items whose names contain the pasted name (or the other way round), or are a
 // typo or two away from it, closest first.
-function similarNames(name, items) {
+function similarItems(name, items) {
   const n = normalize(name);
   if (n.length < 4) return [];
   return items
     .filter((i) => !i.archived && normalize(i.name).length >= 4)
-    .map((i) => ({ name: i.name, n: normalize(i.name) }))
+    .map((i) => ({ id: i.id, name: i.name, n: normalize(i.name) }))
     .map((i) => ({ ...i, d: distance(n, i.n) }))
     .filter((i) => i.n.includes(n) || n.includes(i.n) || i.d <= Math.max(1, Math.floor(n.length / 6)))
     .sort((a, b) => a.d - b.d)
     .slice(0, 3)
-    .map((i) => i.name);
+    .map(({ id, name: itemName }) => ({ id, name: itemName }));
+}
+
+// The location a line names, like "Dehiwela" heading a list of items to send
+// there. Allows a typo in longer names.
+function namedLocation(text, locations) {
+  const n = normalize(text);
+  if (n.length < 3) return null;
+  return locations.find((l) => {
+    const m = normalize(l.name);
+    return m === n || (n.length >= 5 && distance(m, n) <= 1);
+  }) ?? null;
 }
 
 // Matches each pasted line to an item and checks there is enough stock.
 // from is where stock leaves (transfer, sale); to is where it arrives
-// (receive, transfer). Lines for the same item are added together.
-function planPaste(action, parsed, { items, levels }, { from = null, to = null } = {}) {
+// (receive, transfer). Lines for the same item are added together. matches
+// maps a pasted name (normalized) to the item someone picked for it; saving
+// remembers those as aliases.
+function planPaste(action, parsed, { items, levels, aliases = [] }, { from = null, to = null, matches = new Map() } = {}) {
+  const byId = new Map(items.map((i) => [i.id, i]));
   const byName = new Map(items.map((i) => [normalize(i.name), i]));
+  // Names picked for items on uploaded sheets or earlier pastes match too.
+  for (const a of aliases) if (!byName.has(a.name_key) && byId.has(a.item_id)) byName.set(a.name_key, byId.get(a.item_id));
   const current = new Map(levels.map((l) => [`${l.item_id}:${l.location_id}`, l.quantity]));
+  // Group the pasted rows by the item they are (or, for unknown names, by name).
   const merged = new Map();
+  const newAliases = [];
   for (const row of parsed.rows) {
     const key = normalize(row.name);
-    const entry = merged.get(key);
+    const picked = matches.has(key) ? byId.get(matches.get(key)) : null;
+    const item = picked ?? byName.get(key) ?? null;
+    if (picked && normalize(picked.name) !== key && !newAliases.some((a) => normalize(a.name) === key)) {
+      newAliases.push({ name: row.name, item_id: picked.id });
+    }
+    const group = item ? `item:${item.id}` : `name:${key}`;
+    const entry = merged.get(group);
     if (entry) {
       entry.quantity += row.quantity;
       entry.lines.push(row.line);
+      if (!entry.names.includes(row.name)) entry.names.push(row.name);
     } else {
-      merged.set(key, { name: row.name, quantity: row.quantity, lines: [row.line] });
+      merged.set(group, { item, name: row.name, names: [row.name], quantity: row.quantity, lines: [row.line] });
     }
   }
   const lines = [];
   const skipped = [...parsed.skipped];
-  for (const [key, entry] of merged) {
-    const item = byName.get(key);
-    const skip = (reason) => skipped.push({ line: entry.lines[0], text: `${entry.name} ${entry.quantity}`, reason });
+  for (const entry of merged.values()) {
+    const { item } = entry;
+    const skip = (reason, extra = {}) => skipped.push({ line: entry.lines[0], text: `${entry.name} ${entry.quantity}`, reason, ...extra });
     if (item?.archived) {
       skip(`"${item.name}" is archived in the app`);
       continue;
     }
     if (!item && action !== 'receive') {
-      const similar = similarNames(entry.name, items);
-      skip(similar.length ? `not in the app. Did you mean: ${similar.join(', ')}?` : 'not in the app');
+      const similar = similarItems(entry.name, items);
+      skip(similar.length ? `not in the app. Did you mean: ${similar.map((i) => i.name).join(', ')}?` : 'not in the app', {
+        name: entry.name, similar_to: similar.map((i) => i.name), similar_ids: similar.map((i) => i.id),
+      });
       continue;
     }
     if (item && from) {
@@ -138,14 +165,17 @@ function planPaste(action, parsed, { items, levels }, { from = null, to = null }
         continue;
       }
     }
+    const similar = item ? [] : similarItems(entry.name, items);
     lines.push({
       lines: entry.lines,
       name: entry.name,
+      pasted_names: entry.names,
       quantity: entry.quantity,
       item_id: item?.id ?? null,
       item_name: item?.name ?? entry.name,
       new_item: !item,
-      similar_to: item ? [] : similarNames(entry.name, items),
+      similar_to: similar.map((i) => i.name),
+      similar_ids: similar.map((i) => i.id),
     });
   }
   skipped.sort((a, b) => a.line - b.line);
@@ -156,6 +186,7 @@ function planPaste(action, parsed, { items, levels }, { from = null, to = null }
     to: to && { location_id: to.id, location_name: to.name },
     lines,
     skipped,
+    aliases: newAliases,
     // Same keys as a stock sheet upload, so upload history can show both.
     summary: {
       kind: action,
@@ -191,7 +222,8 @@ async function applyPaste(client, plan, { note, uploadId }) {
       alerts.push(...r.alerts);
     }
   }
+  for (const a of plan.aliases ?? []) await saveAlias(client, a.name, a.item_id);
   return alerts;
 }
 
-module.exports = { ACTIONS, parseLine, parsePaste, planPaste, applyPaste };
+module.exports = { ACTIONS, parseLine, parsePaste, planPaste, applyPaste, namedLocation };

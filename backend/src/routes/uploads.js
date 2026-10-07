@@ -13,12 +13,26 @@ const router = express.Router();
 // the query string. Vercel caps request bodies at 4.5 MB.
 const rawFile = express.raw({ type: () => true, limit: '4mb' });
 
+// ?matches=7:12,9:40 says sheet row 7 is item 12 and row 9 is item 40: the
+// items someone picked in the preview for names the app didn't recognise.
+function parseMatches(text) {
+  const matches = new Map();
+  if (!text) return matches;
+  for (const pair of String(text).split(',')) {
+    const m = pair.trim().match(/^(\d+):(\d+)$/);
+    if (!m) throw badRequest('matches must look like 7:12,9:40 (sheet row:item id)');
+    matches.set(Number(m[1]), Number(m[2]));
+  }
+  return matches;
+}
+
 // Reads the uploaded sheet and works out what saving it would do.
 async function plan(req) {
   const filename = path.basename(String(req.query.filename ?? ''));
   if (!filename) throw badRequest('filename is required');
   if (!Buffer.isBuffer(req.body) || !req.body.length) throw badRequest('The file is empty');
   const locationId = req.query.location_id ? positiveInt(req.query.location_id, 'location_id') : null;
+  const matches = parseMatches(req.query.matches);
 
   let rows;
   try {
@@ -38,7 +52,9 @@ async function plan(req) {
   if (locationId && !context.locations.some((l) => l.id === locationId)) throw badRequest(`Location ${locationId} not found`);
   const { mapping, errors } = mapColumns(rows[headerIndex], context.locations, {}, locationId);
   if (errors.length) throw badRequest(`${errors.join('. ')}. Columns in the file: ${rows[headerIndex].filter(Boolean).join(', ')}`);
-  const result = planImport(rows, headerIndex, mapping, context.items, { updateExisting: true, levels: context.levels });
+  const result = planImport(rows, headerIndex, mapping, context.items, {
+    updateExisting: true, levels: context.levels, aliases: context.aliases, matches,
+  });
   return { filename, notes, headerIndex, mapping, plan: result };
 }
 
@@ -54,11 +70,11 @@ function describe({ filename, notes, headerIndex, mapping, plan: p }) {
     },
     summary: summarize(p),
     new_items: p.create.map((e) => ({
-      row: e.row, name: e.name, sku: e.sku, unit: e.unit, similar_to: e.similar,
+      row: e.row, name: e.name, sku: e.sku, unit: e.unit, similar_to: e.similar.map((i) => i.name), similar_ids: e.similar.map((i) => i.id),
       stock: e.stock.map((s) => ({ ...loc(s.location), quantity: s.quantity })),
     })),
     changes: p.update.flatMap((e) => e.changes.map((c) => ({
-      row: e.row, item_id: e.item.id, item_name: e.item.name, ...loc(c.location), from: c.from, to: c.quantity,
+      row: e.row, sheet_name: e.name, item_id: e.item.id, item_name: e.item.name, ...loc(c.location), from: c.from, to: c.quantity,
     }))),
     skipped: p.skipped,
   };

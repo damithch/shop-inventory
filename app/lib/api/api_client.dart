@@ -239,26 +239,39 @@ class ApiClient {
 
   /// What uploading this stock sheet would change. Saves nothing.
   /// [locationId] is where a plain quantity column's stock is; null means the main shop.
-  Future<UploadPreview> previewUpload({required String filename, required List<int> bytes, int? locationId}) async {
+  /// [matches] maps a sheet row to the id of the item it is, for names the
+  /// app doesn't recognise. Saving remembers them for later sheets.
+  Future<UploadPreview> previewUpload({
+    required String filename,
+    required List<int> bytes,
+    int? locationId,
+    Map<int, int> matches = const {},
+  }) async {
     final res = await _send(
       'POST',
       '/uploads/preview',
       bytes: bytes,
-      query: {'filename': filename, 'location_id': locationId?.toString()},
+      query: _uploadQuery(filename, locationId, matches),
     );
     return UploadPreview.fromJson(res as Map<String, dynamic>);
   }
 
   /// Saves the stock sheet: new items are added, and lower counts are recorded as sold.
-  Future<UploadResult> upload({required String filename, required List<int> bytes, int? locationId}) async {
-    final res = await _send(
-      'POST',
-      '/uploads',
-      bytes: bytes,
-      query: {'filename': filename, 'location_id': locationId?.toString()},
-    );
+  Future<UploadResult> upload({
+    required String filename,
+    required List<int> bytes,
+    int? locationId,
+    Map<int, int> matches = const {},
+  }) async {
+    final res = await _send('POST', '/uploads', bytes: bytes, query: _uploadQuery(filename, locationId, matches));
     return UploadResult.fromJson(res as Map<String, dynamic>);
   }
+
+  Map<String, String?> _uploadQuery(String filename, int? locationId, Map<int, int> matches) => {
+    'filename': filename,
+    'location_id': locationId?.toString(),
+    'matches': [for (final e in matches.entries) '${e.key}:${e.value}'].join(','),
+  };
 
   Future<List<UploadResult>> uploads({int limit = 50}) async {
     final res = await _send('GET', '/uploads', query: {'limit': '$limit'}) as List;
@@ -273,8 +286,13 @@ class ApiClient {
     required String text,
     int? locationId,
     int? toLocationId,
+    Map<String, int> matches = const {},
   }) async {
-    final res = await _send('POST', '/paste/preview', body: _pasteBody(action, text, locationId, toLocationId));
+    final res = await _send(
+      'POST',
+      '/paste/preview',
+      body: _pasteBody(action, text, locationId, toLocationId, matches),
+    );
     return PastePreview.fromJson(res as Map<String, dynamic>);
   }
 
@@ -283,16 +301,24 @@ class ApiClient {
     required String text,
     int? locationId,
     int? toLocationId,
+    Map<String, int> matches = const {},
   }) async {
-    final res = await _send('POST', '/paste', body: _pasteBody(action, text, locationId, toLocationId));
+    final res = await _send('POST', '/paste', body: _pasteBody(action, text, locationId, toLocationId, matches));
     return UploadResult.fromJson(res as Map<String, dynamic>);
   }
 
-  Map<String, Object> _pasteBody(PasteAction action, String text, int? locationId, int? toLocationId) => {
+  Map<String, Object> _pasteBody(
+    PasteAction action,
+    String text,
+    int? locationId,
+    int? toLocationId,
+    Map<String, int> matches,
+  ) => {
     'action': action.name,
     'text': text,
     'location_id': ?locationId,
     'to_location_id': ?toLocationId,
+    if (matches.isNotEmpty) 'matches': matches,
   };
 
   /// What sold on [date] (the shop's today when null), optionally at one location.
