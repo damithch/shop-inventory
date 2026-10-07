@@ -214,12 +214,14 @@ function planImport(rows, headerIndex, mapping, existingItems, {
 } = {}) {
   const existing = new Map();
   const byId = new Map(existingItems.map((item) => [item.id, item]));
-  // Archived items go first so a live item with the same name wins.
-  for (const item of [...existingItems.filter((i) => i.archived), ...existingItems.filter((i) => !i.archived)]) {
+  // Only live items match by name, SKU or alias: a removed or deleted item's
+  // name on a sheet becomes a new item again.
+  const live = existingItems.filter((i) => !i.archived);
+  for (const item of live) {
     if (item.sku) existing.set(itemKey(item.name, item.sku), item);
     existing.set(itemKey(item.name, null), item);
   }
-  const byAlias = new Map(aliases.filter((a) => byId.has(a.item_id)).map((a) => [a.name_key, byId.get(a.item_id)]));
+  const byAlias = new Map(aliases.filter((a) => byId.get(a.item_id)?.archived === false).map((a) => [a.name_key, byId.get(a.item_id)]));
   const seenItems = new Map();
   const newAliases = [];
   const current = new Map(levels.map((l) => [`${l.item_id}:${l.location_id}`, l.quantity]));

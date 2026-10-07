@@ -125,7 +125,8 @@ Answers `{ items, units, dry_run }` (items and units taken to zero) plus
 - Each count taken away is an `adjust` movement noted "Reset to zero", so
   item history shows what was there. Resets never raise low-stock alerts.
 - Sales history and the sales report are untouched; deleted items and
-  branches are archived, so old reports keep their names.
+  branches are archived, so old reports keep their names. Stock sheets and pasted lists never match a deleted item: its name
+  on a sheet becomes a new item.
 - A deleted item's SKU is cleared and its other sheet names forgotten, so
   a new item can take the SKU and name. A deleted branch is renamed
   "Kandy Branch (deleted 2026-10-07)" so its name can be used again.

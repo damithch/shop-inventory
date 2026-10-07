@@ -183,3 +183,20 @@ test('rejects files it cannot read', async () => {
   assert.equal((await upload('/uploads/preview', '', 'Item,Qty\nRice,1\n')).status, 400);
   assert.equal((await request(app).post('/uploads/preview?filename=a.csv').send('x')).status, 401);
 });
+
+test('after deleting every item, the same sheet brings the items back as new', async () => {
+  const sheet = 'Item name,Qty\nRice,10\nSalt,3\n';
+  assert.equal((await upload('/uploads', 'first.csv', sheet)).status, 201);
+  assert.equal((await api.post('/reset/delete-all-items', { password: 'test-password' })).status, 200);
+
+  const res = await upload('/uploads', 'again.csv', sheet);
+  assert.equal(res.status, 201);
+  assert.equal(res.body.summary.new_items, 2);
+  assert.equal(res.body.summary.skipped_rows, 0);
+  const rice = await itemByName('Rice');
+  assert.equal(rice.main_quantity, 10);
+
+  // A pasted list matches the new items, not the deleted ones.
+  const paste = await api.post('/paste/preview', { action: 'receive', text: 'Rice 2' });
+  assert.equal(paste.body.lines[0].item_id, rice.id);
+});

@@ -143,10 +143,10 @@ function planPaste(action, parsed, { items, levels, aliases = [] }, {
   from = null, to = null, matches = new Map(), noMatch = new Set(), prices = new Map(),
 } = {}) {
   const byId = new Map(items.map((i) => [i.id, i]));
-  // Archived items go first so a live item with the same name wins.
-  const byName = new Map([...items.filter((i) => i.archived), ...items.filter((i) => !i.archived)].map((i) => [normalize(i.name), i]));
+  // Only live items match: a removed or deleted item's name is new again.
+  const byName = new Map(items.filter((i) => !i.archived).map((i) => [normalize(i.name), i]));
   // Names picked for items on uploaded sheets or earlier pastes match too.
-  for (const a of aliases) if (!byName.has(a.name_key) && byId.has(a.item_id)) byName.set(a.name_key, byId.get(a.item_id));
+  for (const a of aliases) if (!byName.has(a.name_key) && byId.get(a.item_id)?.archived === false) byName.set(a.name_key, byId.get(a.item_id));
   const current = new Map(levels.map((l) => [`${l.item_id}:${l.location_id}`, l.quantity]));
   // Group the pasted rows by the item they are (or, for unknown names, by name).
   const merged = new Map();
