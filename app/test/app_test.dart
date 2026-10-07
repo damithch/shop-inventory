@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shop_inventory/api/api_client.dart';
 import 'package:shop_inventory/main.dart';
+import 'package:shop_inventory/models.dart';
 import 'package:shop_inventory/push.dart';
+import 'package:shop_inventory/screens/export_screen.dart';
 import 'package:shop_inventory/screens/upload_screen.dart';
 import 'package:shop_inventory/session.dart';
 
@@ -348,6 +350,85 @@ void main() {
 
     expect(backend.defaultThreshold, 5);
     expect(find.text('Warn when 5 or fewer are left'), findsOneWidget);
+  });
+
+  testWidgets('exports a branch as CSV and shares it, then saves the item list', (tester) async {
+    final shared = <ExportFile>[];
+    final saved = <ExportFile>[];
+    shareExport = (file) async => shared.add(file);
+    saveExport = (file) async {
+      saved.add(file);
+      return true;
+    };
+    addTearDown(() {
+      shareExport = shareFileFromPhone;
+      saveExport = saveFileToPhone;
+    });
+
+    await pumpApp(tester);
+    await signIn(tester, 'secret');
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Export to Excel or CSV'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Stock at all places'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Stock at Kandy').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CSV'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Share'));
+    await tester.pumpAndSettle();
+    expect(shared.single.name, 'stock-2.csv');
+    expect(utf8.decode(shared.single.bytes), startsWith('Item name,Qty'));
+
+    await tester.tap(find.text('Stock at Kandy'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Item list').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Excel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save to phone'));
+    await tester.pumpAndSettle();
+    expect(saved.single.name, 'items.xlsx');
+    expect(find.text('Saved items.xlsx'), findsOneWidget);
+  });
+
+  testWidgets('changes the password and stays signed in', (tester) async {
+    await pumpApp(tester);
+    await signIn(tester, 'secret');
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Change password'));
+    await tester.pumpAndSettle();
+
+    Finder field(String label) => find.widgetWithText(TextFormField, label);
+    await tester.enterText(field('Current password'), 'wrong');
+    await tester.enterText(field('New password'), 'new-secret');
+    await tester.enterText(field('New password again'), 'new-secret');
+    await tester.tap(find.text('Change'));
+    await tester.pumpAndSettle();
+    expect(find.text('The current password is wrong'), findsOneWidget);
+    expect(backend.password, 'secret');
+
+    await tester.enterText(field('Current password'), 'secret');
+    await tester.enterText(field('New password again'), 'new-secre');
+    await tester.tap(find.text('Change'));
+    await tester.pumpAndSettle();
+    expect(find.text('The new passwords are different'), findsOneWidget);
+
+    await tester.enterText(field('New password again'), 'new-secret');
+    await tester.tap(find.text('Change'));
+    await tester.pumpAndSettle();
+    expect(backend.password, 'new-secret');
+    expect(find.text('Password changed. Other phones need to sign in again.'), findsOneWidget);
+
+    // Still signed in with the new token: the next request works.
+    await tester.tap(find.text('Branches'));
+    await tester.pumpAndSettle();
+    expect(find.text('Kandy'), findsOneWidget);
+    expect(backend.requests.last, 'GET /locations');
   });
 }
 

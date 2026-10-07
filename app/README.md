@@ -30,7 +30,10 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
   are under the history button. **Add list** > **Paste list** takes a list copied from Excel
   or WhatsApp: choose Purchase (stock added at Home), Transfer (from Home to
   a shop) or Sale (at a shop), paste, check the preview, then **Save**.
-- **Settings**: the default alert level (3 to start), alert history, sign out.
+- **Settings**: the default alert level (3 to start), alert history,
+  **Export** (stock at one place or all places, or the item list, as Excel or
+  CSV, then Share or Save to phone), **Change password** (other phones are
+  signed out), sign out.
 
 When a stock change takes something down to its alert level, the app shows a
 "Low stock" warning straight away, and every signed-in phone gets a push

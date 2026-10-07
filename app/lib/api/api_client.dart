@@ -51,6 +51,16 @@ class ApiClient {
     Object? body,
     List<int>? bytes,
     Map<String, String?>? query,
+  }) async => _decode((await _fetch(method, path, body: body, bytes: bytes, query: query)).body);
+
+  /// Sends a request and returns the response if it succeeded, else throws an
+  /// [ApiException] with the server's message.
+  Future<http.Response> _fetch(
+    String method,
+    String path, {
+    Object? body,
+    List<int>? bytes,
+    Map<String, String?>? query,
   }) async {
     final request = http.Request(method, _uri(path, query));
     request.headers['Accept'] = 'application/json';
@@ -72,14 +82,23 @@ class ApiClient {
       throw ApiException('Could not reach the server. Check your connection and the server address.');
     }
 
-    final decoded = _decode(response.body);
-    if (response.statusCode >= 200 && response.statusCode < 300) return decoded;
+    if (response.statusCode >= 200 && response.statusCode < 300) return response;
 
     if (response.statusCode == 401 && token != null) onUnauthorized?.call();
+    final decoded = _decode(response.body);
     final message = decoded is Map && decoded['error'] is String
         ? decoded['error'] as String
         : 'Something went wrong (${response.statusCode})';
     throw ApiException(message, status: response.statusCode);
+  }
+
+  /// Downloads a file, named as the server names it.
+  Future<ExportFile> _download(String path, Map<String, String?> query, String fallbackName) async {
+    final response = await _fetch('GET', path, query: query);
+    final disposition = response.headers['content-disposition'] ?? '';
+    final name = RegExp(r'filename="([^"]+)"').firstMatch(disposition)?.group(1) ?? fallbackName;
+    final mimeType = (response.headers['content-type'] ?? 'application/octet-stream').split(';').first.trim();
+    return ExportFile(name: name, bytes: response.bodyBytes, mimeType: mimeType);
   }
 
   dynamic _decode(String body) {
@@ -95,6 +114,13 @@ class ApiClient {
 
   Future<String> login(String password) async {
     final res = await _send('POST', '/auth/login', body: {'password': password});
+    return res['token'] as String;
+  }
+
+  /// Changes the sign-in password. Other phones are signed out; returns the
+  /// new token for this one.
+  Future<String> changePassword({required String current, required String next}) async {
+    final res = await _send('POST', '/auth/password', body: {'current_password': current, 'new_password': next});
     return res['token'] as String;
   }
 
@@ -326,6 +352,18 @@ class ApiClient {
     final res = await _send('GET', '/reports/sales', query: {'date': date, 'location_id': locationId?.toString()});
     return SalesReport.fromJson(res as Map<String, dynamic>);
   }
+
+  // Exports
+
+  /// Stock at one location, or at every location when [locationId] is null.
+  Future<ExportFile> exportStock({int? locationId, required ExportFormat format}) => _download('/exports/stock', {
+    'location_id': locationId?.toString(),
+    'format': format.name,
+  }, 'stock.${format.name}');
+
+  /// Every item with its total stock.
+  Future<ExportFile> exportItems({required ExportFormat format}) =>
+      _download('/exports/items', {'format': format.name}, 'items.${format.name}');
 
   // Push notifications
 

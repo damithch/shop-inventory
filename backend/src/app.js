@@ -1,5 +1,5 @@
 const express = require('express');
-const { login, requireAuth } = require('./auth');
+const { login, changePassword, requireAuth } = require('./auth');
 const { HttpError } = require('./errors');
 const config = require('./config');
 const { setNotifier } = require('./services/notifier');
@@ -21,12 +21,14 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 app.post('/auth/login', login);
 
 app.use(requireAuth);
+app.post('/auth/password', changePassword);
 app.use('/locations', require('./routes/locations'));
 app.use('/items', require('./routes/items'));
 app.use('/stock', require('./routes/stock'));
 app.use('/uploads', require('./routes/uploads'));
 app.use('/reports', require('./routes/reports'));
 app.use('/paste', require('./routes/paste'));
+app.use('/exports', require('./routes/exports'));
 app.use('/', require('./routes/misc'));
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));

@@ -65,6 +65,15 @@ class Session extends ChangeNotifier {
     unawaited(_registerPush());
   }
 
+  /// Changes the password. Other phones are signed out; this one stays signed
+  /// in with the new token. The same client keeps working, so open screens stay.
+  Future<void> changePassword({required String current, required String next}) async {
+    final token = await _api.changePassword(current: current, next: next);
+    _token = token;
+    _api.token = token;
+    await _prefs.setString(_tokenKey, token);
+  }
+
   Future<void> signOut() async {
     if (_token == null) return;
     // Stop low-stock notifications to this phone. Best effort: signing out
