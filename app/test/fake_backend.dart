@@ -361,9 +361,25 @@ class FakeBackend {
       }
       final name = m[1]!;
       final qty = int.parse(m[2]!);
-      final item = items.where((it) => (it['name'] as String).toLowerCase() == name.toLowerCase()).firstOrNull;
+      final picked = (body['matches'] as Map<String, dynamic>?)?[name] as int?;
+      if (save && picked != null) aliases[name] = picked;
+      final known = picked ?? aliases[name];
+      final item = known != null
+          ? _item(known)
+          : items.where((it) => (it['name'] as String).toLowerCase() == name.toLowerCase()).firstOrNull;
       if (item == null && action != 'receive') {
-        skipped.add({'line': i + 1, 'text': rows[i], 'reason': 'not in the app'});
+        final similar = [
+          for (final it in items)
+            if ((it['name'] as String).toLowerCase().contains(name.toLowerCase())) it,
+        ];
+        skipped.add({
+          'line': i + 1,
+          'text': rows[i],
+          'reason': 'not in the app',
+          'name': name,
+          'similar_to': [for (final it in similar) it['name']],
+          'similar_ids': [for (final it in similar) it['id']],
+        });
       } else if (item != null && from != null && _qty(item['id'] as int, from) < qty) {
         skipped.add({
           'line': i + 1,

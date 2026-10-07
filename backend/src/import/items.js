@@ -349,6 +349,15 @@ async function loadContext(db) {
   return { locations, items, levels, aliases };
 }
 
+// Remembers that a name on a sheet or pasted list is this item.
+async function saveAlias(client, name, itemId) {
+  await client.query(
+    `INSERT INTO item_aliases (name_key, name, item_id) VALUES ($1, $2, $3)
+     ON CONFLICT (name_key) DO UPDATE SET name = EXCLUDED.name, item_id = EXCLUDED.item_id`,
+    [keyName(name), name, itemId],
+  );
+}
+
 // Creates the planned items with their stock as "receive" movements, and
 // brings existing items to the counts in the sheet: a lower count is recorded
 // as a sale, a higher one as stock received. Counts are compared with the
@@ -389,16 +398,10 @@ async function applyPlan(client, plan, { note, uploadId = null }) {
       movements++;
     }
   }
-  for (const a of plan.aliases ?? []) {
-    await client.query(
-      `INSERT INTO item_aliases (name_key, name, item_id) VALUES ($1, $2, $3)
-       ON CONFLICT (name_key) DO UPDATE SET name = EXCLUDED.name, item_id = EXCLUDED.item_id`,
-      [keyName(a.name), a.name, a.item_id],
-    );
-  }
+  for (const a of plan.aliases ?? []) await saveAlias(client, a.name, a.item_id);
   return { items: plan.create.length, updated: plan.update.length, movements, sold, received, alerts };
 }
 
 module.exports = {
-  readTable, readTableBuffer, findHeaderRow, guessHeader, mapColumns, planImport, summarize, loadContext, applyPlan, normalize, parseQuantity,
+  readTable, readTableBuffer, findHeaderRow, guessHeader, mapColumns, planImport, summarize, loadContext, applyPlan, saveAlias, normalize, parseQuantity,
 };

@@ -96,52 +96,15 @@ class _UploadScreenState extends State<UploadScreen> {
 
   /// Asks which item already in the app a new name on the sheet is.
   Future<void> _pickMatch(UploadNewItem item) async {
-    const search = -1;
-    final choice = await showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('"${item.name}" on the sheet is', style: Theme.of(context).textTheme.titleMedium),
-            ),
-            for (var i = 0; i < item.similarIds.length; i++)
-              ListTile(
-                leading: const Icon(Icons.link),
-                title: Text(item.similarTo[i]),
-                onTap: () => Navigator.pop(context, i),
-              ),
-            ListTile(
-              leading: const Icon(Icons.search),
-              title: const Text('Another item in the app…'),
-              onTap: () => Navigator.pop(context, search),
-            ),
-            ListTile(
-              leading: const Icon(Icons.add),
-              title: const Text('A new item'),
-              onTap: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      ),
+    final picked = await pickExistingItem(
+      context,
+      name: item.name,
+      where: 'on the sheet',
+      similarIds: item.similarIds,
+      similarTo: item.similarTo,
     );
-    if (choice == null || !mounted) return;
-    PickedMatch? picked;
-    if (choice == search) {
-      final found = await Navigator.push<Item>(
-        context,
-        MaterialPageRoute(builder: (_) => ItemSearchScreen(initialQuery: item.name)),
-      );
-      if (found != null) picked = PickedMatch(item.name, found.id, found.name);
-    } else {
-      picked = PickedMatch(item.name, item.similarIds[choice], item.similarTo[choice]);
-    }
     if (picked == null || !mounted) return;
-    setState(() => _matches[item.row] = picked!);
+    setState(() => _matches[item.row] = picked);
     await _loadPreview();
   }
 
@@ -227,6 +190,54 @@ class _UploadScreenState extends State<UploadScreen> {
             ),
     );
   }
+}
+
+/// Asks which item already in the app [name] (as written [where]) is: one of
+/// the suggestions, any item found by search, or none (a new item: null).
+Future<PickedMatch?> pickExistingItem(
+  BuildContext context, {
+  required String name,
+  required String where,
+  List<int> similarIds = const [],
+  List<String> similarTo = const [],
+  String noneLabel = 'A new item',
+}) async {
+  const search = -1;
+  final choice = await showModalBottomSheet<int>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text('"$name" $where is', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          for (var i = 0; i < similarIds.length; i++)
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: Text(similarTo[i]),
+              onTap: () => Navigator.pop(context, i),
+            ),
+          ListTile(
+            leading: const Icon(Icons.search),
+            title: const Text('Another item in the app…'),
+            onTap: () => Navigator.pop(context, search),
+          ),
+          ListTile(leading: const Icon(Icons.close), title: Text(noneLabel), onTap: () => Navigator.pop(context)),
+        ],
+      ),
+    ),
+  );
+  if (choice == null || !context.mounted) return null;
+  if (choice != search) return PickedMatch(name, similarIds[choice], similarTo[choice]);
+  final found = await Navigator.push<Item>(
+    context,
+    MaterialPageRoute(builder: (_) => ItemSearchScreen(initialQuery: name)),
+  );
+  return found == null ? null : PickedMatch(name, found.id, found.name);
 }
 
 /// A sheet name the user matched to an item already in the app.

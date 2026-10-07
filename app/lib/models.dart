@@ -385,7 +385,14 @@ class UploadNewItem {
 }
 
 class SkippedRow {
-  SkippedRow({required this.row, required this.item, required this.reason});
+  SkippedRow({
+    required this.row,
+    required this.item,
+    required this.reason,
+    this.name,
+    this.similarTo = const [],
+    this.similarIds = const [],
+  });
 
   factory SkippedRow.fromJson(Map<String, dynamic> j) =>
       SkippedRow(row: asInt(j['row']), item: j['item'] as String, reason: j['reason'] as String);
@@ -393,6 +400,11 @@ class SkippedRow {
   final int row;
   final String item;
   final String reason;
+
+  /// For a pasted name the app doesn't know: the name, and items it may be.
+  final String? name;
+  final List<String> similarTo;
+  final List<int> similarIds;
 }
 
 class UploadPreview {
@@ -516,6 +528,8 @@ enum PasteAction {
 class PasteLine {
   PasteLine({
     required this.lines,
+    this.name = '',
+    this.similarIds = const [],
     required this.itemName,
     required this.quantity,
     required this.newItem,
@@ -524,6 +538,8 @@ class PasteLine {
 
   factory PasteLine.fromJson(Map<String, dynamic> j) => PasteLine(
     lines: [for (final l in j['lines'] as List) asInt(l)],
+    name: (j['name'] as String?) ?? '',
+    similarIds: [for (final id in (j['similar_ids'] as List?) ?? const []) asInt(id)],
     itemName: j['item_name'] as String,
     quantity: asInt(j['quantity']),
     newItem: j['new_item'] == true,
@@ -531,6 +547,10 @@ class PasteLine {
   );
 
   final List<int> lines;
+
+  /// The name as pasted.
+  final String name;
+  final List<int> similarIds;
   final String itemName;
   final int quantity;
   final bool newItem;
@@ -548,6 +568,9 @@ class PastePreview {
           row: asInt((s as Map<String, dynamic>)['line']),
           item: s['text'] as String,
           reason: s['reason'] as String,
+          name: s['name'] as String?,
+          similarTo: ((s['similar_to'] as List?) ?? const []).cast<String>(),
+          similarIds: [for (final id in (s['similar_ids'] as List?) ?? const []) asInt(id)],
         ),
     ],
     summary: UploadSummary.fromJson(j['summary'] as Map<String, dynamic>),

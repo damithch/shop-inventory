@@ -3,22 +3,34 @@ const db = require('../db');
 const { badRequest, positiveInt } = require('../errors');
 const { notifyLowStock } = require('../services/notifier');
 const { loadContext } = require('../import/items');
-const { ACTIONS, parsePaste, planPaste, applyPaste } = require('../import/paste');
+const { normalize } = require('../import/items');
+const { ACTIONS, parsePaste, planPaste, applyPaste, namedLocation } = require('../import/paste');
 
 const router = express.Router();
 
 const LABELS = { receive: 'Pasted purchase', transfer: 'Pasted transfer', sale: 'Pasted sale' };
 
-// Body: { action: receive | transfer | sale, text, location_id, to_location_id }.
+// Body: { action: receive | transfer | sale, text, location_id, to_location_id, matches }.
 // receive: stock arrives at location_id (default the main shop).
-// transfer: stock moves from location_id (default the main shop) to to_location_id.
+// transfer: stock moves from location_id (default the main shop) to
+//   to_location_id, or to the place a line of the list names ("Dehiwela").
 // sale: stock is sold at location_id.
+// matches: { "pasted name": item_id } for names the app didn't recognise.
 async function plan(body = {}) {
   const { action, text } = body;
   if (!ACTIONS.includes(action)) throw badRequest(`action must be one of ${ACTIONS.join(', ')}`);
   if (typeof text !== 'string' || !text.trim()) throw badRequest('Paste the list of items first');
   if (text.length > 200000) throw badRequest('The pasted list is too long');
 
+  const matches = new Map();
+  if (body.matches !== undefined) {
+    if (typeof body.matches !== 'object' || body.matches === null || Array.isArray(body.matches)) {
+      throw badRequest('matches must map pasted names to item ids');
+    }
+    for (const [name, id] of Object.entries(body.matches)) matches.set(normalize(name), positiveInt(id, 'matches'));
+  }
+
+  const parsed = parsePaste(text);
   const context = await loadContext(db);
   const main = context.locations.find((l) => l.type === 'main') ?? context.locations[0];
   const find = (value, field) => {
@@ -33,14 +45,23 @@ async function plan(body = {}) {
     to = body.location_id ? find(body.location_id, 'location_id') : main;
   } else if (action === 'transfer') {
     from = body.location_id ? find(body.location_id, 'location_id') : main;
-    if (!body.to_location_id) throw badRequest('Choose where the stock is going');
-    to = find(body.to_location_id, 'to_location_id');
+    if (body.to_location_id) {
+      to = find(body.to_location_id, 'to_location_id');
+    } else {
+      to = parsed.skipped.map((s) => namedLocation(s.text, context.locations)).find((l) => l && l.id !== from.id);
+      if (!to) throw badRequest('Choose where the stock is going');
+    }
     if (from.id === to.id) throw badRequest('Stock must go to a different place');
   } else {
     if (!body.location_id) throw badRequest('Choose where the items were sold');
     from = find(body.location_id, 'location_id');
   }
-  return planPaste(action, parsePaste(text), context, { from, to });
+  // A line that only names a place is a heading, not an item.
+  for (const s of parsed.skipped) {
+    const place = s.reason === 'no quantity on this line' && namedLocation(s.text, context.locations);
+    if (place) s.reason = `place name (${place.name})`;
+  }
+  return planPaste(action, parsed, context, { from, to, matches });
 }
 
 // What saving the pasted list would do. Saves nothing.

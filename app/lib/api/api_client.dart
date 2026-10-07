@@ -286,8 +286,13 @@ class ApiClient {
     required String text,
     int? locationId,
     int? toLocationId,
+    Map<String, int> matches = const {},
   }) async {
-    final res = await _send('POST', '/paste/preview', body: _pasteBody(action, text, locationId, toLocationId));
+    final res = await _send(
+      'POST',
+      '/paste/preview',
+      body: _pasteBody(action, text, locationId, toLocationId, matches),
+    );
     return PastePreview.fromJson(res as Map<String, dynamic>);
   }
 
@@ -296,16 +301,24 @@ class ApiClient {
     required String text,
     int? locationId,
     int? toLocationId,
+    Map<String, int> matches = const {},
   }) async {
-    final res = await _send('POST', '/paste', body: _pasteBody(action, text, locationId, toLocationId));
+    final res = await _send('POST', '/paste', body: _pasteBody(action, text, locationId, toLocationId, matches));
     return UploadResult.fromJson(res as Map<String, dynamic>);
   }
 
-  Map<String, Object> _pasteBody(PasteAction action, String text, int? locationId, int? toLocationId) => {
+  Map<String, Object> _pasteBody(
+    PasteAction action,
+    String text,
+    int? locationId,
+    int? toLocationId,
+    Map<String, int> matches,
+  ) => {
     'action': action.name,
     'text': text,
     'location_id': ?locationId,
     'to_location_id': ?toLocationId,
+    if (matches.isNotEmpty) 'matches': matches,
   };
 
   /// What sold on [date] (the shop's today when null), optionally at one location.

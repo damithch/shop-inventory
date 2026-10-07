@@ -11,6 +11,10 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
   branch, records a sale, corrects a count, or adds a new item.
 - **Branches**: list of branches with item and unit counts; add a branch. Open one to
   see its stock, record a sale there, move stock out, rename or remove it.
+  From any place (the main shop too), **Stock > Move a list of items** pastes a
+  list to move in one go; a line naming a branch ("Dehiwela") picks where it
+  goes. **Record sales from a list** does the same for sales. Tap a name the
+  app doesn't know to pick the item it is; the app remembers it.
 - **Item**: stock at every location, total, recent changes. Tap a location to set the
   alert level for that item there (or go back to the default).
 - **Low stock**: everything at or below its alert level, with a one-tap refill from

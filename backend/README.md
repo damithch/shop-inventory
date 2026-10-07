@@ -63,7 +63,7 @@ All endpoints except `/health` and `/auth/login` need `Authorization: Bearer <to
 | POST | `/uploads/preview` | file as the body, `?filename=&location_id=&matches=` | What a stock sheet would change; saves nothing |
 | POST | `/uploads` | same | Saves the stock sheet (see below) |
 | GET | `/uploads` | `?limit=` | Past uploads with their summary |
-| POST | `/paste/preview` | `{ action, text, location_id?, to_location_id? }` | What a pasted list would change; saves nothing |
+| POST | `/paste/preview` | `{ action, text, location_id?, to_location_id?, matches? }` | What a pasted list would change; saves nothing |
 | POST | `/paste` | same | Saves the pasted list (see below) |
 | GET | `/reports/sales` | `?date=YYYY-MM-DD&location_id=` | What sold that day (default today), per item and location |
 
@@ -115,7 +115,8 @@ would change; `/paste` saves it. `action` is one of:
 - `receive`: purchases. Stock is added at `location_id` (default the main
   shop). Items not in the app yet are created.
 - `transfer`: stock moves from `location_id` (default the main shop) to
-  `to_location_id`.
+  `to_location_id`, or to the place a line of the list names (a list headed
+  "Dehiwela" goes to Dehiwala; one wrong letter is allowed).
 - `sale`: stock is sold at `location_id`.
 
 Each line is an item and how many: `Rice 5`, `Rice - 5`, `Rice x5`,
@@ -124,6 +125,11 @@ name, the first whole number after it the quantity, so a price column further
 right is ignored). Excel rows sent through WhatsApp, where the tabs become
 runs of spaces, are read the same way. WhatsApp's `[date, time] Name:` prefix and list numbers
 like `1.` are dropped. Lines for the same item are added together.
+
+Names the app doesn't know can be matched to an item with
+`matches: { "Pacific aura": 12 }`. Saving remembers them (as for stock sheets),
+so the next list matches by itself; unknown names in `skipped` carry `name`,
+`similar_to` and `similar_ids` to pick from.
 
 Lines that can't be used change nothing and come back in `skipped` with the
 line number and why: headings, totals, no quantity, an item that isn't in the
