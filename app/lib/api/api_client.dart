@@ -314,11 +314,12 @@ class ApiClient {
     int? toLocationId,
     Map<String, int> matches = const {},
     Set<String> noMatch = const {},
+    Map<int, double?> prices = const {},
   }) async {
     final res = await _send(
       'POST',
       '/paste/preview',
-      body: _pasteBody(action, text, locationId, toLocationId, matches, noMatch),
+      body: _pasteBody(action, text, locationId, toLocationId, matches, noMatch, prices),
     );
     return PastePreview.fromJson(res as Map<String, dynamic>);
   }
@@ -330,11 +331,12 @@ class ApiClient {
     int? toLocationId,
     Map<String, int> matches = const {},
     Set<String> noMatch = const {},
+    Map<int, double?> prices = const {},
   }) async {
     final res = await _send(
       'POST',
       '/paste',
-      body: _pasteBody(action, text, locationId, toLocationId, matches, noMatch),
+      body: _pasteBody(action, text, locationId, toLocationId, matches, noMatch, prices),
     );
     return UploadResult.fromJson(res as Map<String, dynamic>);
   }
@@ -346,6 +348,7 @@ class ApiClient {
     int? toLocationId,
     Map<String, int> matches,
     Set<String> noMatch,
+    Map<int, double?> prices,
   ) => {
     'action': action.name,
     'text': text,
@@ -353,6 +356,7 @@ class ApiClient {
     'to_location_id': ?toLocationId,
     if (matches.isNotEmpty) 'matches': matches,
     if (noMatch.isNotEmpty) 'no_match': noMatch.toList(),
+    if (prices.isNotEmpty) 'prices': {for (final e in prices.entries) '${e.key}': e.value},
   };
 
   /// What sold on [date] (the shop's today when null), optionally at one location.
@@ -360,6 +364,13 @@ class ApiClient {
     final res = await _send('GET', '/reports/sales', query: {'date': date, 'location_id': locationId?.toString()});
     return SalesReport.fromJson(res as Map<String, dynamic>);
   }
+
+  /// The sales report for [date] (today when null) as a PDF, for one
+  /// location or every location when [locationId] is null.
+  Future<ExportFile> salesPdf({String? date, int? locationId}) => _download('/reports/sales/pdf', {
+    'date': date,
+    'location_id': locationId?.toString(),
+  }, 'sales-${date ?? 'today'}.pdf');
 
   // Exports
 

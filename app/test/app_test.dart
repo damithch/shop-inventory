@@ -204,7 +204,7 @@ void main() {
     expect(find.text('3 bag'), findsOneWidget);
 
     // A sale at the Kandy branch: the day shows each place's sales separately.
-    backend.sales.add((item: 10, loc: 2, qty: 1));
+    backend.sales.add((item: 10, loc: 2, qty: 1, price: null));
     await tester.tap(find.text('Low stock').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sales'));
@@ -295,6 +295,72 @@ void main() {
 
     expect(backend.stock['10:2'], 6);
     expect(find.text('2 items sold'), findsOneWidget);
+  });
+
+  testWidgets('enters a branch\'s end-of-day sales with prices and shares the PDF', (tester) async {
+    final shared = <ExportFile>[];
+    shareExport = (file) async => shared.add(file);
+    addTearDown(() => shareExport = shareFileFromPhone);
+    backend.items.add({'id': 11, 'name': 'Sugar 1kg', 'sku': null, 'unit': 'pcs', 'archived': false, 'price': 350});
+    backend.stock['11:2'] = 10;
+
+    await pumpApp(tester);
+    await signIn(tester, 'secret');
+    await tester.tap(find.text('Sales'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add list'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('End of day sales'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Branch'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Rice 5kg 2\nSugar 1kg 3');
+    await tester.pump();
+    await tester.tap(find.text('Check list'));
+    await tester.pumpAndSettle();
+    expect(find.text('5 sold at Kandy'), findsOneWidget);
+    // Sugar has a saved price; rice doesn't yet.
+    expect(find.text('Total LKR 1,050.00'), findsOneWidget);
+    expect(find.text('2 units have no price and are not in the total'), findsOneWidget);
+
+    await tester.tap(find.text('−2 · Add price'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextFormField, 'Price for one (LKR)'), '2,450');
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(find.text('−2 × 2,450.00'), findsOneWidget);
+    expect(find.text('Total LKR 5,950.00'), findsOneWidget);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(backend.stock['10:2'], 2);
+    expect(backend.items.first['price'], 2450);
+    // Rice is now low at Kandy.
+    expect(find.text('Low stock'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(find.text('Saved: 5 sold'), findsOneWidget);
+
+    await tester.tap(find.text('Share PDF'));
+    await tester.pumpAndSettle();
+    expect(shared.single.name, 'sales-2-2026-10-06.pdf');
+    expect(shared.single.mimeType, 'application/pdf');
+    expect(backend.pdfs.single['location_id'], '2');
+
+    // Back on the sales screen, the day shows in rupees, and a past day's PDF
+    // can be made for any place.
+    Navigator.of(tester.element(find.text('Share PDF'))).pop();
+    await tester.pumpAndSettle();
+    expect(find.text('5 items sold'), findsOneWidget);
+    expect(find.text('LKR 5,950.00'), findsOneWidget);
+    await tester.tap(find.byTooltip('Day before'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('PDF report'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Share PDF'));
+    await tester.pumpAndSettle();
+    expect(backend.pdfs.last['date'], '2026-10-05');
+    expect(backend.pdfs.last['location_id'], isNull);
   });
 
   testWidgets('keeping a look-alike as a new item clears its warning', (tester) async {

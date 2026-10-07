@@ -1,5 +1,8 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 const config = require('./config');
+
+// Prices are NUMERIC columns; read them as numbers, not strings.
+types.setTypeParser(types.builtins.NUMERIC, (v) => (v === null ? null : Number(v)));
 
 // On Vercel each function instance gets its own small pool, and idle
 // connections are closed quickly so suspended instances don't hold them.

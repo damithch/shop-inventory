@@ -30,6 +30,11 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
   are under the history button. **Add list** > **Paste list** takes a list copied from Excel
   or WhatsApp: choose Purchase (stock added at Home), Transfer (from Home to
   a shop) or Sale (at a shop), paste, check the preview, then **Save**.
+  **Add list** > **End of day sales** is the same Sale list for one branch,
+  with prices: tap a line's price to set it (it's remembered for next time),
+  and the preview shows the day's total in rupees. Saving offers the day's
+  PDF report to share or save. The PDF button at the top of Sales makes the
+  report for the day shown, for one place or all places.
 - **Settings**: the default alert level (3 to start), alert history,
   **Export** (stock at one place or all places, or the item list, as Excel or
   CSV, then Share or Save to phone), **Change password** (other phones are

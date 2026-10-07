@@ -343,7 +343,7 @@ function summarize(plan) {
 
 async function loadContext(db) {
   const { rows: locations } = await db.query('SELECT id, name, type FROM locations WHERE NOT archived ORDER BY type = \'main\' DESC, name');
-  const { rows: items } = await db.query('SELECT id, name, sku, archived FROM items');
+  const { rows: items } = await db.query('SELECT id, name, sku, archived, price FROM items');
   const { rows: levels } = await db.query('SELECT item_id, location_id, quantity FROM stock_levels');
   const { rows: aliases } = await db.query('SELECT name_key, item_id FROM item_aliases');
   return { locations, items, levels, aliases };

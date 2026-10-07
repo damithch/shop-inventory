@@ -137,8 +137,10 @@ function namedLocation(text, locations) {
 // remembers those as aliases. A name found inside exactly one item's name is
 // matched to it automatically (auto_matched), unless noMatch (normalized
 // names) says it isn't that item.
+// prices maps an item id to the price it sold at (sales only; null for no
+// price); other items use their saved price.
 function planPaste(action, parsed, { items, levels, aliases = [] }, {
-  from = null, to = null, matches = new Map(), noMatch = new Set(),
+  from = null, to = null, matches = new Map(), noMatch = new Set(), prices = new Map(),
 } = {}) {
   const byId = new Map(items.map((i) => [i.id, i]));
   const byName = new Map(items.map((i) => [normalize(i.name), i]));
@@ -203,10 +205,12 @@ function planPaste(action, parsed, { items, levels, aliases = [] }, {
       auto_matched: entry.auto,
       similar_to: similar.map((i) => i.name),
       similar_ids: similar.map((i) => i.id),
+      ...(action === 'sale' && { price: prices.has(item.id) ? prices.get(item.id) : (item.price ?? null) }),
     });
   }
   skipped.sort((a, b) => a.line - b.line);
   const units = lines.reduce((s, l) => s + l.quantity, 0);
+  const priced = lines.filter((l) => l.price !== undefined && l.price !== null);
   return {
     action,
     from: from && { location_id: from.id, location_name: from.name },
@@ -225,12 +229,16 @@ function planPaste(action, parsed, { items, levels, aliases = [] }, {
       sold: action === 'sale' ? units : 0,
       unchanged_items: 0,
       skipped_rows: skipped.length,
+      ...(action === 'sale' && {
+        amount: Math.round(priced.reduce((s, l) => s + l.quantity * l.price * 100, 0)) / 100,
+        unpriced_units: units - priced.reduce((s, l) => s + l.quantity, 0),
+      }),
     },
   };
 }
 
 // Saves a planned paste. Returns low-stock alerts to send after commit.
-async function applyPaste(client, plan, { note, uploadId }) {
+async function applyPaste(client, plan, { note, uploadId, prices = new Map() }) {
   const alerts = [];
   for (const l of plan.lines) {
     let itemId = l.item_id;
@@ -245,8 +253,10 @@ async function applyPaste(client, plan, { note, uploadId }) {
       const r = await transferIn(client, { ...common, fromLocationId: plan.from.location_id, toLocationId: plan.to.location_id });
       alerts.push(...r.alerts);
     } else {
-      const r = await saleIn(client, { ...common, locationId: plan.from.location_id });
+      const r = await saleIn(client, { ...common, locationId: plan.from.location_id, unitPrice: l.price });
       alerts.push(...r.alerts);
+      // A price typed in for this sale becomes the item's price for next time.
+      if (prices.has(l.item_id)) await client.query('UPDATE items SET price = $2 WHERE id = $1', [l.item_id, l.price]);
     }
   }
   for (const a of plan.aliases ?? []) await saveAlias(client, a.name, a.item_id);

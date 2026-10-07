@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const db = require('../db');
-const { notFound, conflict, positiveInt, nonEmptyString, optionalString } = require('../errors');
+const { notFound, conflict, positiveInt, nonEmptyString, optionalString, optionalPrice } = require('../errors');
 const { getDefaultThreshold } = require('../services/stock');
 
 const router = Router();
@@ -29,10 +29,11 @@ router.post('/', async (req, res) => {
   const name = nonEmptyString(req.body?.name, 'name');
   const sku = optionalString(req.body?.sku);
   const unit = optionalString(req.body?.unit) ?? 'pcs';
+  const price = req.body?.price === undefined ? null : optionalPrice(req.body.price, 'price');
   try {
     const { rows } = await db.query(
-      'INSERT INTO items (name, sku, unit) VALUES ($1, $2, $3) RETURNING *',
-      [name, sku, unit],
+      'INSERT INTO items (name, sku, unit, price) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, sku, unit, price],
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -73,6 +74,7 @@ router.patch('/:id', async (req, res) => {
   if (body.name !== undefined) set('name', nonEmptyString(body.name, 'name'));
   if (body.sku !== undefined) set('sku', optionalString(body.sku));
   if (body.unit !== undefined) set('unit', optionalString(body.unit) ?? 'pcs');
+  if (body.price !== undefined) set('price', optionalPrice(body.price, 'price'));
   if (typeof body.archived === 'boolean') set('archived', body.archived);
   if (!fields.length) {
     const { rows } = await db.query('SELECT * FROM items WHERE id = $1', [id]);
