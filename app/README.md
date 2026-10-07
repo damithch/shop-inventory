@@ -34,6 +34,11 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
   **Export** (stock at one place or all places, or the item list, as Excel or
   CSV, then Share or Save to phone), **Change password** (other phones are
   signed out), sign out.
+- **Reset and delete** (in Settings): set every count to 0 at one place or
+  everywhere, delete an item, every item, or a branch. Each asks you to type the
+  place's name (or RESET / DELETE) and your password, saves an Excel backup of
+  the stock on the phone, then does it. If the backup isn't saved, nothing
+  changes. Sales history is kept.
 
 When a stock change takes something down to its alert level, the app shows a
 "Low stock" warning straight away, and every signed-in phone gets a push

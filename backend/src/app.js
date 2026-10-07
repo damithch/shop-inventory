@@ -29,6 +29,7 @@ app.use('/uploads', require('./routes/uploads'));
 app.use('/reports', require('./routes/reports'));
 app.use('/paste', require('./routes/paste'));
 app.use('/exports', require('./routes/exports'));
+app.use('/reset', require('./routes/reset'));
 app.use('/', require('./routes/misc'));
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));

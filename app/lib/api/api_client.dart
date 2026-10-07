@@ -141,6 +141,30 @@ class ApiClient {
     return Location.fromJson(res as Map<String, dynamic>);
   }
 
+  // Reset and delete. Each needs the password again; a dry run checks it and
+  // says what would change without changing anything.
+
+  /// Every count at [locationId], or at every place when null, to zero.
+  Future<ResetResult> resetStock({int? locationId, required String password, bool dryRun = false}) =>
+      _reset('/reset/stock', {'location_id': ?locationId}, password, dryRun);
+
+  /// The item's stock everywhere to zero, then it is removed.
+  Future<ResetResult> deleteItem(int itemId, {required String password, bool dryRun = false}) =>
+      _reset('/reset/delete-item', {'item_id': itemId}, password, dryRun);
+
+  /// Every item's stock to zero, then every item is removed. Places stay.
+  Future<ResetResult> deleteAllItems({required String password, bool dryRun = false}) =>
+      _reset('/reset/delete-all-items', {}, password, dryRun);
+
+  /// The branch's stock to zero, then the branch is removed.
+  Future<ResetResult> deleteBranch(int locationId, {required String password, bool dryRun = false}) =>
+      _reset('/reset/delete-branch', {'location_id': locationId}, password, dryRun);
+
+  Future<ResetResult> _reset(String path, Map<String, Object> body, String password, bool dryRun) async {
+    final res = await _send('POST', path, body: {...body, 'password': password, 'dry_run': dryRun});
+    return ResetResult.fromJson(res as Map<String, dynamic>);
+  }
+
   Future<LocationStock> locationStock(int id) async {
     final res = await _send('GET', '/locations/$id/stock');
     return LocationStock.fromJson(res as Map<String, dynamic>);

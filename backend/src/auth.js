@@ -104,4 +104,4 @@ function forgetCachedPassword() {
   cached = null;
 }
 
-module.exports = { login, changePassword, requireAuth, forgetCachedPassword };
+module.exports = { login, changePassword, requireAuth, checkPassword, forgetCachedPassword };

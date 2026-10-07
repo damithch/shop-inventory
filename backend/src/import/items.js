@@ -214,7 +214,8 @@ function planImport(rows, headerIndex, mapping, existingItems, {
 } = {}) {
   const existing = new Map();
   const byId = new Map(existingItems.map((item) => [item.id, item]));
-  for (const item of existingItems) {
+  // Archived items go first so a live item with the same name wins.
+  for (const item of [...existingItems.filter((i) => i.archived), ...existingItems.filter((i) => !i.archived)]) {
     if (item.sku) existing.set(itemKey(item.name, item.sku), item);
     existing.set(itemKey(item.name, null), item);
   }
