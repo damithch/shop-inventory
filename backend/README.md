@@ -40,6 +40,7 @@ All endpoints except `/health` and `/auth/login` need `Authorization: Bearer <to
 | Method | Path | Body / query | Notes |
 |---|---|---|---|
 | POST | `/auth/login` | `{ password }` | Returns `{ token }` |
+| POST | `/auth/password` | `{ current_password, new_password }` | Changes the password (6+ characters). Returns a new `{ token }`; every other token stops working |
 | GET | `/health` | | |
 | GET | `/locations` | `?include_archived=true` | Main shop first, with item counts |
 | POST | `/locations` | `{ name }` | Adds a branch |
@@ -65,6 +66,8 @@ All endpoints except `/health` and `/auth/login` need `Authorization: Bearer <to
 | GET | `/uploads` | `?limit=` | Past uploads with their summary |
 | POST | `/paste/preview` | `{ action, text, location_id?, to_location_id?, matches?, no_match? }` | What a pasted list would change; saves nothing |
 | POST | `/paste` | same | Saves the pasted list (see below) |
+| GET | `/exports/stock` | `?location_id=&format=xlsx\|csv` | Stock at one location, or every location without `location_id` (see below) |
+| GET | `/exports/items` | `?format=xlsx\|csv` | Every item with its total stock and the date it was added |
 | GET | `/reports/sales` | `?date=YYYY-MM-DD&location_id=` | What sold that day (default today), per item and location |
 
 Stock endpoints return `{ movement, levels, alerts }` so the app can update its
@@ -72,6 +75,34 @@ screen and show any alert straight away.
 
 Errors are `{ "error": "message" }` with a 400, 401, 404 or 409 status. The
 messages are written to be shown to the user as they are.
+
+## Password
+
+The owner signs in with `ADMIN_PASSWORD` until the password is changed in the
+app (Settings > Change password). The new password is stored in the database
+(`settings` row `admin_password`, scrypt-hashed) and from then on
+`ADMIN_PASSWORD` no longer works. Changing it signs out every other phone
+within about 30 seconds.
+
+If the password is forgotten, run this in Supabase's SQL editor, and
+`ADMIN_PASSWORD` works again:
+
+```sql
+DELETE FROM settings WHERE key = 'admin_password';
+```
+
+## Exports
+
+`/exports/stock` and `/exports/items` download a spreadsheet, named like
+`stock-kandy-branch-2026-10-07.xlsx` (the shop's date). `format` is `xlsx`
+(default) or `csv`; CSV files start with a byte order mark so Excel reads
+non-English letters correctly. Archived items and locations are left out.
+
+- One location: item name, SKU, unit, `Qty`, alert level and a "Yes" when
+  low. These columns read back as a stock sheet, so a counted copy can be
+  uploaded for that location.
+- All locations: one row per item with a column per location and the total.
+  The Excel file also has a sheet for each location, as above.
 
 ## Stock sheets uploaded from the app
 

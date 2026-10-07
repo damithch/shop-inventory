@@ -10,6 +10,7 @@ const db = require('../src/db');
 const migrate = require('../src/migrate');
 const app = require('../src/app');
 const { setNotifier } = require('../src/services/notifier');
+const { forgetCachedPassword } = require('../src/auth');
 
 const sent = [];
 setNotifier(async (alerts) => sent.push(...alerts));
@@ -17,6 +18,7 @@ setNotifier(async (alerts) => sent.push(...alerts));
 async function reset() {
   await db.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await migrate();
+  forgetCachedPassword();
   sent.length = 0;
 }
 

@@ -1,5 +1,7 @@
 // Data returned by the inventory API. Field names follow backend/README.md.
 
+import 'dart:typed_data';
+
 int asInt(Object? v) => v is num ? v.toInt() : int.parse(v.toString());
 int? asIntOrNull(Object? v) => v == null ? null : asInt(v);
 DateTime? asDate(Object? v) => v == null ? null : DateTime.tryParse(v.toString())?.toLocal();
@@ -592,4 +594,22 @@ class PastePreview {
   final UploadSummary summary;
   final String? fromName;
   final String? toName;
+}
+
+enum ExportFormat {
+  xlsx('Excel'),
+  csv('CSV');
+
+  const ExportFormat(this.label);
+
+  final String label;
+}
+
+/// A spreadsheet downloaded from the server, ready to share or save.
+class ExportFile {
+  const ExportFile({required this.name, required this.bytes, required this.mimeType});
+
+  final String name;
+  final Uint8List bytes;
+  final String mimeType;
 }

@@ -8,7 +8,10 @@ import 'package:http/testing.dart';
 class FakeBackend {
   FakeBackend({this.password = 'secret'});
 
-  final String password;
+  String password;
+
+  /// The token login hands out; changing the password replaces it.
+  String token = 'tok';
   int defaultThreshold = 3;
   final requests = <String>[];
 
@@ -74,10 +77,27 @@ class FakeBackend {
 
     if (req.method == 'POST' && path == '/auth/login') {
       return body['password'] == password
-          ? _json({'token': 'tok', 'expires_in': '30d'})
+          ? _json({'token': token, 'expires_in': '30d'})
           : _error(401, 'Wrong password');
     }
-    if (req.headers['Authorization'] != 'Bearer tok') return _error(401, 'Sign in required');
+    if (req.headers['Authorization'] != 'Bearer $token') return _error(401, 'Sign in required');
+
+    if (req.method == 'POST' && path == '/auth/password') {
+      if (body['current_password'] != password) return _error(400, 'The current password is wrong');
+      password = body['new_password'] as String;
+      token = '${token}2';
+      return _json({'token': token, 'expires_in': '30d'});
+    }
+    if (req.method == 'GET' && path.startsWith('/exports/')) {
+      final format = req.url.queryParameters['format'];
+      final where = req.url.queryParameters['location_id'] ?? 'all';
+      final name = path == '/exports/items' ? 'items.$format' : 'stock-$where.$format';
+      return http.Response.bytes(
+        utf8.encode('Item name,Qty\r\nRice 5kg,8\r\n'),
+        200,
+        headers: {'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="$name"'},
+      );
+    }
 
     if (req.method == 'GET' && path == '/locations') {
       return _json([
