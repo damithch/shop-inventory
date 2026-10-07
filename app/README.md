@@ -19,7 +19,9 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
   picker to change the day. **Add list** > **Upload stock sheet** picks an Excel (.xlsx) or
   CSV stock count from the phone and the location it's for, shows what would
   change (new items, sold, received, rows that can't be used, new items that
-  look like existing ones), and saves it on **Save**. Upload the shop's count
+  look like existing ones), and saves it on **Save**. Tap a new item to say
+  which item already in the app it is ("HAWAS ICE" is "RASASI HAWAS ICE 100 ML");
+  the app remembers it for later sheets and pasted lists. Upload the shop's count
   each evening: drops since the last count are recorded as sales. Past uploads
   are under the history button. **Add list** > **Paste list** takes a list copied from Excel
   or WhatsApp: choose Purchase (stock added at Home), Transfer (from Home to

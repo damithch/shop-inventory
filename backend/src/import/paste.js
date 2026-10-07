@@ -103,8 +103,11 @@ function similarNames(name, items) {
 // Matches each pasted line to an item and checks there is enough stock.
 // from is where stock leaves (transfer, sale); to is where it arrives
 // (receive, transfer). Lines for the same item are added together.
-function planPaste(action, parsed, { items, levels }, { from = null, to = null } = {}) {
+function planPaste(action, parsed, { items, levels, aliases = [] }, { from = null, to = null } = {}) {
+  const byId = new Map(items.map((i) => [i.id, i]));
   const byName = new Map(items.map((i) => [normalize(i.name), i]));
+  // Names picked for items on uploaded sheets match here too.
+  for (const a of aliases) if (!byName.has(a.name_key) && byId.has(a.item_id)) byName.set(a.name_key, byId.get(a.item_id));
   const current = new Map(levels.map((l) => [`${l.item_id}:${l.location_id}`, l.quantity]));
   const merged = new Map();
   for (const row of parsed.rows) {

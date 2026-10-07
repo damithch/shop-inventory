@@ -206,12 +206,21 @@ function itemKey(name, sku) {
 // skipped. Rows for items already in the app are skipped unless
 // updateExisting is set; then their counts become the new stock levels.
 // levels (from loadContext) gives the current counts so changes can be shown.
-function planImport(rows, headerIndex, mapping, existingItems, { updateExisting = false, levels = [] } = {}) {
+// aliases are other names items go by (item_aliases rows). matches maps a
+// sheet row number to the id of the item someone picked for it in the preview;
+// those picks become aliases when the plan is saved.
+function planImport(rows, headerIndex, mapping, existingItems, {
+  updateExisting = false, levels = [], aliases = [], matches = new Map(),
+} = {}) {
   const existing = new Map();
+  const byId = new Map(existingItems.map((item) => [item.id, item]));
   for (const item of existingItems) {
     if (item.sku) existing.set(itemKey(item.name, item.sku), item);
     existing.set(itemKey(item.name, null), item);
   }
+  const byAlias = new Map(aliases.filter((a) => byId.has(a.item_id)).map((a) => [a.name_key, byId.get(a.item_id)]));
+  const seenItems = new Map();
+  const newAliases = [];
   const current = new Map(levels.map((l) => [`${l.item_id}:${l.location_id}`, l.quantity]));
   const seen = new Map();
   const create = [];
@@ -262,9 +271,21 @@ function planImport(rows, headerIndex, mapping, existingItems, { updateExisting 
       continue;
     }
     seen.set(key, rowNumber);
-    const match = existing.get(key);
+    let match = existing.get(key) ?? byAlias.get(keyName(name));
+    if (matches.has(rowNumber)) {
+      match = byId.get(matches.get(rowNumber));
+      if (!match) {
+        skip(`the item picked for this row (${matches.get(rowNumber)}) is not in the app`);
+        continue;
+      }
+    }
     if (match) {
       const described = `"${match.name}"${match.sku ? ` (SKU ${match.sku})` : ''}`;
+      if (seenItems.has(match.id)) {
+        skip(`${described} is already on row ${seenItems.get(match.id)}`);
+        continue;
+      }
+      seenItems.set(match.id, rowNumber);
       if (match.archived) {
         skip(`${described} is archived in the app`);
       } else if (!updateExisting) {
@@ -273,20 +294,23 @@ function planImport(rows, headerIndex, mapping, existingItems, { updateExisting 
         const changes = counts
           .map((c) => ({ ...c, from: current.get(`${match.id}:${c.location.id}`) ?? 0 }))
           .filter((c) => c.from !== c.quantity);
-        if (changes.length) update.push({ row: rowNumber, item: match, changes });
+        if (changes.length) update.push({ row: rowNumber, name, item: match, changes });
         else unchanged++;
+        if (matches.has(rowNumber) && keyName(name) !== keyName(match.name)) {
+          newAliases.push({ name, item_id: match.id });
+        }
       }
       continue;
     }
-    create.push({ row: rowNumber, name, sku, unit, stock: counts.filter((c) => c.quantity > 0), similar: similarNames(name, existingItems) });
+    create.push({ row: rowNumber, name, sku, unit, stock: counts.filter((c) => c.quantity > 0), similar: similarItems(name, existingItems) });
   }
-  return { create, update, unchanged, skipped, blankRows };
+  return { create, update, unchanged, skipped, blankRows, aliases: newAliases };
 }
 
 // Items in the app whose name contains this one or is contained in it, e.g.
 // "HAWAS ICE" and "RASASI HAWAS ICE 100 ML", so a short name on a sheet
 // doesn't quietly become a second copy of an item.
-function similarNames(name, items) {
+function similarItems(name, items) {
   const n = normalize(name);
   if (n.length < 4) return [];
   return items
@@ -295,8 +319,11 @@ function similarNames(name, items) {
       const m = normalize(i.name);
       return m.includes(n) || n.includes(m);
     })
+    // Closest in length first: "AFNAN 9PM" is more likely "AFNAN 9 PM 100 ML"
+    // than "AFNAN 9 PM POUR FEMME GIFT SET".
+    .sort((a, b) => Math.abs(normalize(a.name).length - n.length) - Math.abs(normalize(b.name).length - n.length))
     .slice(0, 3)
-    .map((i) => i.name);
+    .map((i) => ({ id: i.id, name: i.name }));
 }
 
 // Totals for a plan: units going in as new stock, sold and received.
@@ -318,7 +345,8 @@ async function loadContext(db) {
   const { rows: locations } = await db.query('SELECT id, name, type FROM locations WHERE NOT archived ORDER BY type = \'main\' DESC, name');
   const { rows: items } = await db.query('SELECT id, name, sku, archived FROM items');
   const { rows: levels } = await db.query('SELECT item_id, location_id, quantity FROM stock_levels');
-  return { locations, items, levels };
+  const { rows: aliases } = await db.query('SELECT name_key, item_id FROM item_aliases');
+  return { locations, items, levels, aliases };
 }
 
 // Creates the planned items with their stock as "receive" movements, and
@@ -360,6 +388,13 @@ async function applyPlan(client, plan, { note, uploadId = null }) {
       }
       movements++;
     }
+  }
+  for (const a of plan.aliases ?? []) {
+    await client.query(
+      `INSERT INTO item_aliases (name_key, name, item_id) VALUES ($1, $2, $3)
+       ON CONFLICT (name_key) DO UPDATE SET name = EXCLUDED.name, item_id = EXCLUDED.item_id`,
+      [keyName(a.name), a.name, a.item_id],
+    );
   }
   return { items: plan.create.length, updated: plan.update.length, movements, sold, received, alerts };
 }

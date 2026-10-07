@@ -60,7 +60,7 @@ All endpoints except `/health` and `/auth/login` need `Authorization: Bearer <to
 | POST | `/devices` | `{ token, platform? }` | Registers a phone's FCM token |
 | DELETE | `/devices/:token` | | |
 | GET | `/alerts` | `?limit=&before_id=` | Alert history, newest first |
-| POST | `/uploads/preview` | file as the body, `?filename=&location_id=` | What a stock sheet would change; saves nothing |
+| POST | `/uploads/preview` | file as the body, `?filename=&location_id=&matches=` | What a stock sheet would change; saves nothing |
 | POST | `/uploads` | same | Saves the stock sheet (see below) |
 | GET | `/uploads` | `?limit=` | Past uploads with their summary |
 | POST | `/paste/preview` | `{ action, text, location_id?, to_location_id? }` | What a pasted list would change; saves nothing |
@@ -92,7 +92,12 @@ raw request body (`Content-Type: application/octet-stream`) with its name in
 - Items missing from the sheet, and blank quantity cells, leave stock as it is.
 - Names match ignoring case, spaces and punctuation. New items whose name is
   part of an existing one (or the other way round) are listed with
-  `similar_to`, so the app can warn before a short name becomes a duplicate.
+  `similar_to` and `similar_ids`, so the app can warn before a short name
+  becomes a duplicate.
+- `?matches=7:12,9:40` says sheet row 7 is item 12 and row 9 is item 40, for
+  names the app didn't recognise ("HAWAS ICE" for "RASASI HAWAS ICE 100 ML").
+  Saving remembers each picked name (`item_aliases`), so later sheets and
+  pasted lists match it by themselves.
 - Rows that can't be used (no name, negative or fractional count, totals row,
   duplicate) are listed in `skipped` and change nothing.
 - Sales that take an item to its alert level send the usual low-stock alert.

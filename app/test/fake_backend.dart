@@ -31,6 +31,9 @@ class FakeBackend {
   final sales = <({int item, int loc, int qty})>[];
   final uploads = <Map<String, dynamic>>[];
 
+  /// Sheet names picked for an item in an upload preview: name -> item id.
+  final aliases = <String, int>{};
+
   http.Client get client => MockClient(_handle);
 
   int _qty(int item, int loc) => stock['$item:$loc'] ?? 0;
@@ -243,25 +246,35 @@ class FakeBackend {
   /// A stock sheet as CSV lines of "name,count" under a header row.
   http.Response _upload(http.Request req, {required bool save}) {
     final loc = int.tryParse(req.url.queryParameters['location_id'] ?? '') ?? 1;
-    final rows = const LineSplitter().convert(utf8.decode(req.bodyBytes)).skip(1).map((l) => l.split(','));
+    final rows = const LineSplitter().convert(utf8.decode(req.bodyBytes)).skip(1).map((l) => l.split(',')).toList();
+    final matches = {
+      for (final pair in (req.url.queryParameters['matches'] ?? '').split(',').where((p) => p.isNotEmpty))
+        int.parse(pair.split(':')[0]): int.parse(pair.split(':')[1]),
+    };
     final newItems = <Map<String, dynamic>>[];
     final changes = <Map<String, dynamic>>[];
     var unchanged = 0;
     var sold = 0;
     var received = 0;
-    for (final [name, count] in rows) {
+    for (var r = 0; r < rows.length; r++) {
+      final [name, count] = rows[r];
+      final row = r + 2;
       final qty = int.parse(count);
-      final existing = items.where((i) => i['name'] == name).firstOrNull;
+      final matchedId = matches[row] ?? aliases[name];
+      final existing = matchedId != null ? _item(matchedId) : items.where((i) => i['name'] == name).firstOrNull;
+      if (save && matches.containsKey(row)) aliases[name] = matches[row]!;
       if (existing == null) {
+        final similar = [
+          for (final i in items)
+            if ((i['name'] as String).contains(name)) i,
+        ];
         newItems.add({
-          'row': 2,
+          'row': row,
           'name': name,
           'sku': null,
           'unit': 'pcs',
-          'similar_to': [
-            for (final i in items)
-              if ((i['name'] as String).contains(name)) i['name'],
-          ],
+          'similar_to': [for (final i in similar) i['name']],
+          'similar_ids': [for (final i in similar) i['id']],
           'stock': [
             {'location_id': loc, 'location_name': _loc(loc)['name'], 'quantity': qty},
           ],
@@ -280,9 +293,9 @@ class FakeBackend {
         continue;
       }
       changes.add({
-        'row': 2,
+        'row': row,
         'item_id': id,
-        'item_name': name,
+        'item_name': existing['name'],
         'location_id': loc,
         'location_name': _loc(loc)['name'],
         'from': from,

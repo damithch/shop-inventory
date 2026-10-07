@@ -38,6 +38,9 @@ class _UploadScreenState extends State<UploadScreen> {
   int? _locationId;
   PickedSheet? _file;
   UploadPreview? _preview;
+
+  /// Sheet rows the user said are an item already in the app, by row number.
+  final _matches = <int, PickedMatch>{};
   bool _busy = false;
   Object? _error;
 
@@ -63,7 +66,10 @@ class _UploadScreenState extends State<UploadScreen> {
   Future<void> _pick() async {
     final file = await pickSheet();
     if (file == null || !mounted) return;
-    setState(() => _file = file);
+    setState(() {
+      _file = file;
+      _matches.clear();
+    });
     await _loadPreview();
   }
 
@@ -77,7 +83,7 @@ class _UploadScreenState extends State<UploadScreen> {
     });
     try {
       final preview = await SessionScope.apiOf(context)
-          .previewUpload(filename: file.name, bytes: file.bytes, locationId: _locationId);
+          .previewUpload(filename: file.name, bytes: file.bytes, locationId: _locationId, matches: _matchIds);
       if (mounted) setState(() => _preview = preview);
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -86,12 +92,70 @@ class _UploadScreenState extends State<UploadScreen> {
     }
   }
 
+  Map<int, int> get _matchIds => {for (final e in _matches.entries) e.key: e.value.itemId};
+
+  /// Asks which item already in the app a new name on the sheet is.
+  Future<void> _pickMatch(UploadNewItem item) async {
+    const search = -1;
+    final choice = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('"${item.name}" on the sheet is', style: Theme.of(context).textTheme.titleMedium),
+            ),
+            for (var i = 0; i < item.similarIds.length; i++)
+              ListTile(
+                leading: const Icon(Icons.link),
+                title: Text(item.similarTo[i]),
+                onTap: () => Navigator.pop(context, i),
+              ),
+            ListTile(
+              leading: const Icon(Icons.search),
+              title: const Text('Another item in the app…'),
+              onTap: () => Navigator.pop(context, search),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add),
+              title: const Text('A new item'),
+              onTap: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    PickedMatch? picked;
+    if (choice == search) {
+      final found = await Navigator.push<Item>(
+        context,
+        MaterialPageRoute(builder: (_) => ItemSearchScreen(initialQuery: item.name)),
+      );
+      if (found != null) picked = PickedMatch(item.name, found.id, found.name);
+    } else {
+      picked = PickedMatch(item.name, item.similarIds[choice], item.similarTo[choice]);
+    }
+    if (picked == null || !mounted) return;
+    setState(() => _matches[item.row] = picked!);
+    await _loadPreview();
+  }
+
+  Future<void> _unmatch(int row) async {
+    setState(() => _matches.remove(row));
+    await _loadPreview();
+  }
+
   Future<void> _save() async {
     final file = _file!;
     setState(() => _busy = true);
     try {
       final result = await SessionScope.apiOf(context)
-          .upload(filename: file.name, bytes: file.bytes, locationId: _locationId);
+          .upload(filename: file.name, bytes: file.bytes, locationId: _locationId, matches: _matchIds);
       if (!mounted) return;
       final s = result.summary;
       showMessage(context, 'Saved: ${s.newItems} new items, ${s.sold} sold, ${s.received} received');
@@ -141,7 +205,13 @@ class _UploadScreenState extends State<UploadScreen> {
           const SizedBox(height: 16),
           if (_busy && preview == null) const Center(child: CircularProgressIndicator()),
           if (_error != null) Text('$_error', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          if (preview != null) _PreviewView(preview: preview),
+          if (preview != null)
+            _PreviewView(
+              preview: preview,
+              matches: _matches,
+              onPick: _busy ? null : _pickMatch,
+              onUnmatch: _busy ? null : _unmatch,
+            ),
         ],
       ),
       bottomNavigationBar: preview == null
@@ -159,10 +229,22 @@ class _UploadScreenState extends State<UploadScreen> {
   }
 }
 
+/// A sheet name the user matched to an item already in the app.
+class PickedMatch {
+  const PickedMatch(this.sheetName, this.itemId, this.itemName);
+
+  final String sheetName;
+  final int itemId;
+  final String itemName;
+}
+
 class _PreviewView extends StatelessWidget {
-  const _PreviewView({required this.preview});
+  const _PreviewView({required this.preview, required this.matches, this.onPick, this.onUnmatch});
 
   final UploadPreview preview;
+  final Map<int, PickedMatch> matches;
+  final ValueChanged<UploadNewItem>? onPick;
+  final ValueChanged<int>? onUnmatch;
 
   @override
   Widget build(BuildContext context) {
@@ -204,8 +286,9 @@ class _PreviewView extends StatelessWidget {
             icon: Icons.warning_amber_rounded,
             warning: true,
             text:
-                '${lookalikes.length} new items look like items already in the app. If they are the same, '
-                'rename them in the sheet so they match, or they will be added as separate items.',
+                '${lookalikes.length} new items look like items already in the app. Tap each one under '
+                'New items to pick the item it is, or it will be added as a separate item. '
+                'The app remembers your choice for the next sheet.',
           ),
         _Section(
           title: 'Sold (${sold.length})',
@@ -232,12 +315,30 @@ class _PreviewView extends StatelessWidget {
           ],
         ),
         _Section(
+          title: 'Matched by you (${matches.length})',
+          initiallyExpanded: true,
+          children: [
+            for (final e in matches.entries)
+              ListTile(
+                dense: true,
+                title: Text(e.value.sheetName),
+                subtitle: Text('is ${e.value.itemName}'),
+                trailing: IconButton(
+                  tooltip: 'Undo',
+                  icon: const Icon(Icons.undo),
+                  onPressed: onUnmatch == null ? null : () => onUnmatch!(e.key),
+                ),
+              ),
+          ],
+        ),
+        _Section(
           title: 'New items (${preview.newItems.length})',
           initiallyExpanded: lookalikes.isNotEmpty,
           children: [
             for (final i in preview.newItems)
               ListTile(
                 dense: true,
+                onTap: onPick == null ? null : () => onPick!(i),
                 title: Text(i.name),
                 subtitle: i.similarTo.isEmpty
                     ? null
@@ -292,6 +393,59 @@ class _Section extends StatelessWidget {
       initiallyExpanded: initiallyExpanded,
       tilePadding: EdgeInsets.zero,
       children: children,
+    );
+  }
+}
+
+/// Search the items in the app and pick one. Pops with the [Item].
+class ItemSearchScreen extends StatefulWidget {
+  const ItemSearchScreen({super.key, this.initialQuery = ''});
+
+  final String initialQuery;
+
+  @override
+  State<ItemSearchScreen> createState() => _ItemSearchScreenState();
+}
+
+class _ItemSearchScreenState extends State<ItemSearchScreen> {
+  final _loader = GlobalKey<LoaderState<List<Item>>>();
+  late final _query = TextEditingController(text: _firstWord(widget.initialQuery));
+
+  /// Short names on sheets rarely match a whole name, so start with the first word.
+  static String _firstWord(String name) => name.trim().split(RegExp(r'\s+')).first;
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final api = SessionScope.apiOf(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: TextField(
+          controller: _query,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Search items', border: InputBorder.none),
+          onChanged: (_) => _loader.currentState?.reload(),
+        ),
+      ),
+      body: Loader<List<Item>>(
+        key: _loader,
+        load: () => api.items(search: _query.text.trim()),
+        builder: (context, items, _) => ListView(
+          children: [
+            if (items.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Text('No items match.', textAlign: TextAlign.center),
+              ),
+            for (final item in items) ListTile(title: Text(item.name), onTap: () => Navigator.pop(context, item)),
+          ],
+        ),
+      ),
     );
   }
 }

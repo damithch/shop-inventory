@@ -214,6 +214,39 @@ void main() {
     expect(find.text('Main Shop'), findsNothing);
   });
 
+  testWidgets('a new name on a sheet can be matched to an existing item', (tester) async {
+    pickSheet = () async => PickedSheet('home.csv', utf8.encode('Item,Qty\nRice,6\n'));
+    await pumpApp(tester);
+    await signIn(tester, 'secret');
+    await tester.tap(find.text('Sales'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add list'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Upload stock sheet'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Choose file'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 new items (6 in stock)'), findsOneWidget);
+
+    // "Rice" on the sheet is Rice 5kg: then it's 2 sold, not a new item.
+    await tester.ensureVisible(find.text('Rice'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rice'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rice 5kg').last);
+    await tester.pumpAndSettle();
+    expect(find.text('0 new items (0 in stock)'), findsOneWidget);
+    expect(find.text('2 sold'), findsOneWidget);
+    expect(find.text('is Rice 5kg'), findsOneWidget);
+    expect(backend.requests.last, 'POST /uploads/preview');
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(backend.stock['10:1'], 6);
+    expect(backend.items.length, 1);
+    expect(backend.aliases, {'Rice': 10});
+  });
+
   testWidgets('pastes a transfer to a branch and then a sale there', (tester) async {
     await pumpApp(tester);
     await signIn(tester, 'secret');

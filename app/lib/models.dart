@@ -348,9 +348,17 @@ class UploadChange {
 
 /// An item the sheet adds to the app.
 class UploadNewItem {
-  UploadNewItem({required this.name, required this.unit, required this.stock, required this.similarTo});
+  UploadNewItem({
+    required this.name,
+    required this.unit,
+    required this.stock,
+    required this.similarTo,
+    this.row = 0,
+    this.similarIds = const [],
+  });
 
   factory UploadNewItem.fromJson(Map<String, dynamic> j) => UploadNewItem(
+    row: asIntOrNull(j['row']) ?? 0,
     name: j['name'] as String,
     unit: (j['unit'] as String?) ?? 'pcs',
     stock: {
@@ -358,8 +366,11 @@ class UploadNewItem {
         s['location_name'] as String: asInt(s['quantity']),
     },
     similarTo: ((j['similar_to'] as List?) ?? const []).cast<String>(),
+    similarIds: [for (final id in (j['similar_ids'] as List?) ?? const []) asInt(id)],
   );
 
+  /// Row number in the sheet, as Excel shows it.
+  final int row;
   final String name;
   final String unit;
 
@@ -368,6 +379,9 @@ class UploadNewItem {
 
   /// Items already in the app with a similar name: maybe the same item.
   final List<String> similarTo;
+
+  /// The ids of [similarTo], in the same order.
+  final List<int> similarIds;
 }
 
 class SkippedRow {
