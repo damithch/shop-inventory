@@ -31,6 +31,9 @@ class _PasteScreenState extends State<PasteScreen> {
 
   /// Pasted names the user kept as new items (purchases) or left out.
   final _decided = <String>{};
+
+  /// Pasted names the app matched by itself, but the user said aren't that item.
+  final _noMatch = <String>{};
   int? _from;
   int? _to;
   PastePreview? _preview;
@@ -138,7 +141,7 @@ class _PasteScreenState extends State<PasteScreen> {
 
   Map<String, int> get _matchIds => {for (final e in _matches.entries) e.key: e.value.itemId};
 
-  Future<void> _pickMatch(String name, List<int> similarIds, List<String> similarTo) async {
+  Future<void> _pickMatch(String name, List<int> similarIds, List<String> similarTo, {bool autoMatched = false}) async {
     final picked = await pickExistingItem(
       context,
       name: name,
@@ -149,10 +152,11 @@ class _PasteScreenState extends State<PasteScreen> {
     );
     if (picked == null || !mounted) return;
     if (picked.keepsNew) {
-      final wasMatched = _matches.containsKey(name);
+      final wasMatched = _matches.containsKey(name) || autoMatched;
       setState(() {
         _matches.remove(name);
         _decided.add(name);
+        if (autoMatched) _noMatch.add(name);
       });
       showMessage(context, _action == PasteAction.receive ? '"$name" will be added as a new item' : '"$name" left out');
       if (wasMatched) await _check();
@@ -160,6 +164,7 @@ class _PasteScreenState extends State<PasteScreen> {
     }
     setState(() {
       _decided.remove(name);
+      _noMatch.remove(name);
       _matches[name] = picked;
     });
     showMessage(context, '"$name" matched to ${picked.itemName}');
@@ -188,6 +193,7 @@ class _PasteScreenState extends State<PasteScreen> {
         locationId: _locationId,
         toLocationId: _toLocationId,
         matches: _matchIds,
+        noMatch: _noMatch,
       );
       if (mounted) setState(() => _preview = preview);
     } catch (e) {
@@ -206,6 +212,7 @@ class _PasteScreenState extends State<PasteScreen> {
         locationId: _locationId,
         toLocationId: _toLocationId,
         matches: _matchIds,
+        noMatch: _noMatch,
       );
       if (!mounted) return;
       final s = result.summary;
@@ -346,7 +353,7 @@ class _PastePreviewView extends StatelessWidget {
   final PastePreview preview;
   final Map<String, PickedMatch> matches;
   final Set<String> decided;
-  final void Function(String name, List<int> similarIds, List<String> similarTo)? onPick;
+  final void Function(String name, List<int> similarIds, List<String> similarTo, {bool autoMatched})? onPick;
   final ValueChanged<String>? onUnmatch;
 
   @override
@@ -357,6 +364,7 @@ class _PastePreviewView extends StatelessWidget {
         .where((l) => l.newItem && l.similarTo.isNotEmpty && !decided.contains(l.name))
         .length;
     final unknown = preview.skipped.where((r) => r.name != null && !decided.contains(r.name)).length;
+    final auto = preview.lines.where((l) => l.autoMatched).length;
     final units = preview.lines.fold<int>(0, (t, l) => t + l.quantity);
     final headline = switch (action) {
       PasteAction.receive => '$units received at ${preview.toName}',
@@ -403,6 +411,15 @@ class _PastePreviewView extends StatelessWidget {
               style: TextStyle(color: theme.colorScheme.error),
             ),
           ),
+        if (auto > 0)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.auto_fix_high, color: theme.colorScheme.tertiary),
+            title: Text(
+              '$auto short names were matched to the one item they are part of. Check them below, '
+              'and tap one to change it.',
+            ),
+          ),
         if (matches.isNotEmpty)
           ExpansionTile(
             title: Text('Matched by you (${matches.length})'),
@@ -446,9 +463,21 @@ class _PastePreviewView extends StatelessWidget {
             for (final l in preview.lines)
               ListTile(
                 dense: true,
-                onTap: !l.newItem || onPick == null ? null : () => onPick!(l.name, l.similarIds, l.similarTo),
+                onTap: onPick == null
+                    ? null
+                    : l.autoMatched
+                    ? () =>
+                          onPick!(l.name, [l.itemId!, ...l.similarIds], [l.itemName, ...l.similarTo], autoMatched: true)
+                    : l.newItem
+                    ? () => onPick!(l.name, l.similarIds, l.similarTo)
+                    : null,
                 title: Text(l.itemName),
-                subtitle: !l.newItem
+                subtitle: l.autoMatched
+                    ? Text(
+                        'Matched from "${l.name}". Tap to change',
+                        style: TextStyle(color: theme.colorScheme.tertiary),
+                      )
+                    : !l.newItem
                     ? null
                     : Text(
                         decided.contains(l.name) || l.similarTo.isEmpty

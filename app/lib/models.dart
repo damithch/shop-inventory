@@ -533,6 +533,8 @@ class PasteLine {
     required this.itemName,
     required this.quantity,
     required this.newItem,
+    this.itemId,
+    this.autoMatched = false,
     this.similarTo = const [],
   });
 
@@ -543,6 +545,8 @@ class PasteLine {
     itemName: j['item_name'] as String,
     quantity: asInt(j['quantity']),
     newItem: j['new_item'] == true,
+    itemId: j['item_id'] == null ? null : asInt(j['item_id']),
+    autoMatched: j['auto_matched'] == true,
     similarTo: [for (final s in (j['similar_to'] as List?) ?? const []) s as String],
   );
 
@@ -554,6 +558,11 @@ class PasteLine {
   final String itemName;
   final int quantity;
   final bool newItem;
+  final int? itemId;
+
+  /// The pasted name is part of exactly one item's name, so the app matched
+  /// it to that item by itself ("Floriana" is RAYHAAN FLORIANA).
+  final bool autoMatched;
   final List<String> similarTo;
 }
 

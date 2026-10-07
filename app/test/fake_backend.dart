@@ -364,9 +364,17 @@ class FakeBackend {
       final picked = (body['matches'] as Map<String, dynamic>?)?[name] as int?;
       if (save && picked != null) aliases[name] = picked;
       final known = picked ?? aliases[name];
-      final item = known != null
+      final exact = known != null
           ? _item(known)
           : items.where((it) => (it['name'] as String).toLowerCase() == name.toLowerCase()).firstOrNull;
+      // A name that is part of exactly one item's name matches it by itself.
+      final containing = [
+        for (final it in items)
+          if ((' ${(it['name'] as String).toLowerCase()} ').contains(' ${name.toLowerCase()} ')) it,
+      ];
+      final refused = ((body['no_match'] as List?) ?? const []).contains(name);
+      final auto = exact == null && !refused && containing.length == 1 ? containing.single : null;
+      final item = exact ?? auto;
       if (item == null && action != 'receive') {
         final similar = [
           for (final it in items)
@@ -394,6 +402,7 @@ class FakeBackend {
           'item_id': item?['id'],
           'item_name': item?['name'] ?? name,
           'new_item': item == null,
+          'auto_matched': auto != null,
           'similar_to': <String>[],
         });
       }

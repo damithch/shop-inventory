@@ -16,6 +16,7 @@ const LABELS = { receive: 'Pasted purchase', transfer: 'Pasted transfer', sale: 
 //   to_location_id, or to the place a line of the list names ("Dehiwela").
 // sale: stock is sold at location_id.
 // matches: { "pasted name": item_id } for names the app didn't recognise.
+// no_match: ["pasted name"] the app matched automatically, but wrongly.
 async function plan(body = {}) {
   const { action, text } = body;
   if (!ACTIONS.includes(action)) throw badRequest(`action must be one of ${ACTIONS.join(', ')}`);
@@ -28,6 +29,14 @@ async function plan(body = {}) {
       throw badRequest('matches must map pasted names to item ids');
     }
     for (const [name, id] of Object.entries(body.matches)) matches.set(normalize(name), positiveInt(id, 'matches'));
+  }
+
+  const noMatch = new Set();
+  if (body.no_match !== undefined) {
+    if (!Array.isArray(body.no_match) || body.no_match.some((n) => typeof n !== 'string')) {
+      throw badRequest('no_match must be a list of pasted names');
+    }
+    for (const name of body.no_match) noMatch.add(normalize(name));
   }
 
   const parsed = parsePaste(text);
@@ -61,7 +70,7 @@ async function plan(body = {}) {
     const place = s.reason === 'no quantity on this line' && namedLocation(s.text, context.locations);
     if (place) s.reason = `place name (${place.name})`;
   }
-  return planPaste(action, parsed, context, { from, to, matches });
+  return planPaste(action, parsed, context, { from, to, matches, noMatch });
 }
 
 // What saving the pasted list would do. Saves nothing.

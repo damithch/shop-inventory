@@ -234,7 +234,14 @@ Future<PickedMatch?> pickExistingItem(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('"$name" $where is', style: Theme.of(context).textTheme.titleMedium),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Which item is "$name" $where?', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                const Text('The app remembers your choice for next time.'),
+              ],
+            ),
           ),
           for (var i = 0; i < similarIds.length; i++)
             ListTile(

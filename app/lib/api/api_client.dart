@@ -287,11 +287,12 @@ class ApiClient {
     int? locationId,
     int? toLocationId,
     Map<String, int> matches = const {},
+    Set<String> noMatch = const {},
   }) async {
     final res = await _send(
       'POST',
       '/paste/preview',
-      body: _pasteBody(action, text, locationId, toLocationId, matches),
+      body: _pasteBody(action, text, locationId, toLocationId, matches, noMatch),
     );
     return PastePreview.fromJson(res as Map<String, dynamic>);
   }
@@ -302,8 +303,13 @@ class ApiClient {
     int? locationId,
     int? toLocationId,
     Map<String, int> matches = const {},
+    Set<String> noMatch = const {},
   }) async {
-    final res = await _send('POST', '/paste', body: _pasteBody(action, text, locationId, toLocationId, matches));
+    final res = await _send(
+      'POST',
+      '/paste',
+      body: _pasteBody(action, text, locationId, toLocationId, matches, noMatch),
+    );
     return UploadResult.fromJson(res as Map<String, dynamic>);
   }
 
@@ -313,12 +319,14 @@ class ApiClient {
     int? locationId,
     int? toLocationId,
     Map<String, int> matches,
+    Set<String> noMatch,
   ) => {
     'action': action.name,
     'text': text,
     'location_id': ?locationId,
     'to_location_id': ?toLocationId,
     if (matches.isNotEmpty) 'matches': matches,
+    if (noMatch.isNotEmpty) 'no_match': noMatch.toList(),
   };
 
   /// What sold on [date] (the shop's today when null), optionally at one location.
