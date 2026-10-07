@@ -4,6 +4,7 @@ import '../models.dart';
 import '../session.dart';
 import '../widgets.dart';
 import 'item_detail_screen.dart';
+import 'paste_screen.dart';
 import 'upload_screen.dart';
 
 String _isoDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -40,8 +41,32 @@ class _SalesScreenState extends State<SalesScreen> {
     if (picked != null) _setDay(picked);
   }
 
-  Future<void> _upload() async {
-    final saved = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const UploadScreen()));
+  /// Paste a list (purchases, transfer, sales) or upload a stock sheet.
+  Future<void> _addList() async {
+    final screen = await showModalBottomSheet<Widget>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.content_paste),
+              title: const Text('Paste list'),
+              subtitle: const Text('Purchases, transfers or sales copied from Excel or WhatsApp'),
+              onTap: () => Navigator.pop(context, const PasteScreen()),
+            ),
+            ListTile(
+              leading: const Icon(Icons.upload_file),
+              title: const Text('Upload stock sheet'),
+              subtitle: const Text('An Excel or CSV stock count'),
+              onTap: () => Navigator.pop(context, const UploadScreen()),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (screen == null || !mounted) return;
+    final saved = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => screen));
     if (saved == true) _loader.currentState?.reload();
   }
 
@@ -60,9 +85,9 @@ class _SalesScreenState extends State<SalesScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _upload,
-        icon: const Icon(Icons.upload_file),
-        label: const Text('Upload stock sheet'),
+        onPressed: _addList,
+        icon: const Icon(Icons.playlist_add),
+        label: const Text('Add list'),
       ),
       body: Loader<SalesReport>(
         key: _loader,
@@ -130,7 +155,7 @@ class _SalesScreenState extends State<SalesScreen> {
                 const Padding(
                   padding: EdgeInsets.all(32),
                   child: Text(
-                    'No sales recorded for this day. Upload the end-of-day stock sheet to record them.',
+                    'No sales recorded for this day. Paste the sales list or upload the end-of-day stock sheet to record them.',
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -164,7 +189,7 @@ class UploadHistoryScreen extends StatelessWidget {
           if (uploads.isEmpty) {
             return ListView(
               padding: const EdgeInsets.all(32),
-              children: const [Text('No stock sheets uploaded yet.', textAlign: TextAlign.center)],
+              children: const [Text('No stock sheets or pasted lists yet.', textAlign: TextAlign.center)],
             );
           }
           return ListView.separated(
@@ -176,7 +201,13 @@ class UploadHistoryScreen extends StatelessWidget {
               return ListTile(
                 title: Text(u.filename),
                 subtitle: Text(
-                  '${formatDate(u.createdAt)} · ${s.newItems} new, ${s.sold} sold, ${s.received} received',
+                  [
+                    formatDate(u.createdAt),
+                    if (s.newItems > 0) '${s.newItems} new',
+                    if (s.sold > 0) '${s.sold} sold',
+                    if (s.received > 0) '${s.received} received',
+                    if (s.transferred > 0) '${s.transferred} moved',
+                  ].join(' · '),
                 ),
               );
             },

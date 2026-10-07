@@ -301,6 +301,7 @@ class UploadSummary {
     required this.received,
     required this.unchangedItems,
     required this.skippedRows,
+    this.transferred = 0,
   });
 
   factory UploadSummary.fromJson(Map<String, dynamic> j) => UploadSummary(
@@ -311,6 +312,7 @@ class UploadSummary {
     received: asInt(j['received']),
     unchangedItems: asInt(j['unchanged_items']),
     skippedRows: asInt(j['skipped_rows']),
+    transferred: asIntOrNull(j['transferred']) ?? 0,
   );
 
   final int newItems;
@@ -320,6 +322,9 @@ class UploadSummary {
   final int received;
   final int unchangedItems;
   final int skippedRows;
+
+  /// Units moved between locations, for a pasted transfer.
+  final int transferred;
 }
 
 /// An item already in the app whose count the sheet changes.
@@ -480,4 +485,65 @@ class SalesReport {
   final String date;
   final int total;
   final List<SaleLine> items;
+}
+
+/// What a pasted list is: purchases received, a transfer, or sales.
+enum PasteAction {
+  receive('Purchase'),
+  transfer('Transfer'),
+  sale('Sale');
+
+  const PasteAction(this.label);
+
+  final String label;
+}
+
+/// One item from a pasted list (lines for the same item added together).
+class PasteLine {
+  PasteLine({
+    required this.lines,
+    required this.itemName,
+    required this.quantity,
+    required this.newItem,
+    this.similarTo = const [],
+  });
+
+  factory PasteLine.fromJson(Map<String, dynamic> j) => PasteLine(
+    lines: [for (final l in j['lines'] as List) asInt(l)],
+    itemName: j['item_name'] as String,
+    quantity: asInt(j['quantity']),
+    newItem: j['new_item'] == true,
+    similarTo: [for (final s in (j['similar_to'] as List?) ?? const []) s as String],
+  );
+
+  final List<int> lines;
+  final String itemName;
+  final int quantity;
+  final bool newItem;
+  final List<String> similarTo;
+}
+
+class PastePreview {
+  PastePreview({required this.lines, required this.skipped, required this.summary, this.fromName, this.toName});
+
+  factory PastePreview.fromJson(Map<String, dynamic> j) => PastePreview(
+    lines: [for (final l in j['lines'] as List) PasteLine.fromJson(l as Map<String, dynamic>)],
+    skipped: [
+      for (final s in j['skipped'] as List)
+        SkippedRow(
+          row: asInt((s as Map<String, dynamic>)['line']),
+          item: s['text'] as String,
+          reason: s['reason'] as String,
+        ),
+    ],
+    summary: UploadSummary.fromJson(j['summary'] as Map<String, dynamic>),
+    fromName: (j['from'] as Map<String, dynamic>?)?['location_name'] as String?,
+    toName: (j['to'] as Map<String, dynamic>?)?['location_name'] as String?,
+  );
+
+  final List<PasteLine> lines;
+  final List<SkippedRow> skipped;
+  final UploadSummary summary;
+  final String? fromName;
+  final String? toName;
 }

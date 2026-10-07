@@ -179,6 +179,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('0 items sold'), findsOneWidget);
 
+    await tester.tap(find.text('Add list'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Upload stock sheet'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Choose file'));
@@ -210,6 +212,54 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('1 item sold at Kandy'), findsOneWidget);
     expect(find.text('Main Shop'), findsNothing);
+  });
+
+  testWidgets('pastes a transfer to a branch and then a sale there', (tester) async {
+    await pumpApp(tester);
+    await signIn(tester, 'secret');
+    await tester.tap(find.text('Sales'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add list'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Paste list'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Transfer'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Rice 5kg 4\nSugar 2');
+    await tester.pump();
+    await tester.tap(find.text('Check list'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('4 moved from Main Shop to Kandy'), findsOneWidget);
+    expect(find.text('Line 2: Sugar 2'), findsOneWidget);
+    expect(find.text('not in the app'), findsOneWidget);
+    expect(backend.stock['10:1'], 8);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(backend.stock['10:1'], 4);
+    expect(backend.stock['10:2'], 8);
+
+    // Let the "Saved" message go so it doesn't cover the button.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add list'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Paste list'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sale'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Rice 5kg 2');
+    await tester.pump();
+    await tester.tap(find.text('Check list'));
+    await tester.pumpAndSettle();
+    expect(find.text('2 sold at Kandy'), findsOneWidget);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(backend.stock['10:2'], 6);
+    expect(find.text('2 items sold'), findsOneWidget);
   });
 
   testWidgets('changes the default alert level', (tester) async {

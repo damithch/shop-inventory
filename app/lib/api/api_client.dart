@@ -265,6 +265,36 @@ class ApiClient {
     return res.map((e) => UploadResult.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// What saving a pasted list would change. Saves nothing. [locationId] is
+  /// where stock arrives (purchase), leaves from (transfer) or is sold (sale);
+  /// [toLocationId] is where a transfer goes.
+  Future<PastePreview> previewPaste({
+    required PasteAction action,
+    required String text,
+    int? locationId,
+    int? toLocationId,
+  }) async {
+    final res = await _send('POST', '/paste/preview', body: _pasteBody(action, text, locationId, toLocationId));
+    return PastePreview.fromJson(res as Map<String, dynamic>);
+  }
+
+  Future<UploadResult> savePaste({
+    required PasteAction action,
+    required String text,
+    int? locationId,
+    int? toLocationId,
+  }) async {
+    final res = await _send('POST', '/paste', body: _pasteBody(action, text, locationId, toLocationId));
+    return UploadResult.fromJson(res as Map<String, dynamic>);
+  }
+
+  Map<String, Object> _pasteBody(PasteAction action, String text, int? locationId, int? toLocationId) => {
+    'action': action.name,
+    'text': text,
+    'location_id': ?locationId,
+    'to_location_id': ?toLocationId,
+  };
+
   /// What sold on [date] (the shop's today when null), optionally at one location.
   Future<SalesReport> sales({String? date, int? locationId}) async {
     final res = await _send('GET', '/reports/sales', query: {'date': date, 'location_id': locationId?.toString()});
