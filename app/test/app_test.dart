@@ -295,6 +295,32 @@ void main() {
     expect(find.text('2 items sold'), findsOneWidget);
   });
 
+  testWidgets('keeping a look-alike as a new item clears its warning', (tester) async {
+    pickSheet = () async => PickedSheet('home.csv', utf8.encode('Item,Qty\nRice,6\n'));
+    await pumpApp(tester);
+    await signIn(tester, 'secret');
+    await tester.tap(find.text('Sales'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add list'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Upload stock sheet'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Choose file'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1 new items look like'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Rice'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rice'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Keep as a new item'));
+    await tester.pump();
+    expect(find.text('"Rice" will be added as a new item'), findsOneWidget);
+    expect(find.text('New item: your choice'), findsOneWidget);
+    expect(find.textContaining('1 new items look like'), findsNothing);
+    expect(find.textContaining('Looks like:'), findsNothing);
+  });
+
   testWidgets('moves a list of items from the main shop to the branch it names', (tester) async {
     backend.locations.add({'id': 3, 'name': 'Galle', 'type': 'branch', 'archived': false});
     await pumpApp(tester);

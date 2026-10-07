@@ -53,6 +53,12 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
       try {
         final alerts = await api.setThreshold(itemId: detail.item.id, locationId: s.locationId, threshold: value);
         if (!mounted) return;
+        showMessage(
+          context,
+          value == null
+              ? 'Alert level at ${s.locationName} back to the default'
+              : 'Alert level at ${s.locationName} set to $value',
+        );
         await showStockAlerts(context, alerts);
         _reload();
       } catch (e) {
@@ -120,10 +126,13 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> {
         );
         if (ok != true) return;
         await api.updateItem(item.id, archived: true);
-        if (mounted) Navigator.pop(context, true);
+        if (!mounted) return;
+        showMessage(context, '${item.name} removed');
+        Navigator.pop(context, true);
         return;
       }
       await api.updateItem(item.id, name: name.text.trim(), sku: sku.text.trim(), unit: unit.text.trim());
+      if (mounted) showMessage(context, 'Item saved');
       _reload();
     } catch (e) {
       if (mounted) showError(context, e);

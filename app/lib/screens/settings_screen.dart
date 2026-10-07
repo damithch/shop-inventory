@@ -26,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (value == null || !mounted) return;
     try {
       await SessionScope.apiOf(context).setDefaultThreshold(value);
+      if (mounted) showMessage(context, 'Default alert level set to $value');
       _loader.currentState?.reload();
     } catch (e) {
       if (mounted) showError(context, e);

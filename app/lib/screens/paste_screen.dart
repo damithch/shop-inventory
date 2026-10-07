@@ -28,6 +28,9 @@ class _PasteScreenState extends State<PasteScreen> {
 
   /// Pasted names the user said are an item already in the app.
   final _matches = <String, PickedMatch>{};
+
+  /// Pasted names the user kept as new items (purchases) or left out.
+  final _decided = <String>{};
   int? _from;
   int? _to;
   PastePreview? _preview;
@@ -142,10 +145,24 @@ class _PasteScreenState extends State<PasteScreen> {
       where: 'in the list',
       similarIds: similarIds,
       similarTo: similarTo,
-      noneLabel: _action == PasteAction.receive ? 'A new item' : 'Leave it out',
+      noneLabel: _action == PasteAction.receive ? 'Keep as a new item' : 'Leave it out',
     );
     if (picked == null || !mounted) return;
-    setState(() => _matches[name] = picked);
+    if (picked.keepsNew) {
+      final wasMatched = _matches.containsKey(name);
+      setState(() {
+        _matches.remove(name);
+        _decided.add(name);
+      });
+      showMessage(context, _action == PasteAction.receive ? '"$name" will be added as a new item' : '"$name" left out');
+      if (wasMatched) await _check();
+      return;
+    }
+    setState(() {
+      _decided.remove(name);
+      _matches[name] = picked;
+    });
+    showMessage(context, '"$name" matched to ${picked.itemName}');
     await _check();
   }
 
@@ -294,6 +311,7 @@ class _PasteScreenState extends State<PasteScreen> {
               action: _action,
               preview: preview,
               matches: _matches,
+              decided: _decided,
               onPick: _busy ? null : _pickMatch,
               onUnmatch: _busy ? null : _unmatch,
             ),
@@ -319,6 +337,7 @@ class _PastePreviewView extends StatelessWidget {
     required this.action,
     required this.preview,
     required this.matches,
+    this.decided = const {},
     this.onPick,
     this.onUnmatch,
   });
@@ -326,6 +345,7 @@ class _PastePreviewView extends StatelessWidget {
   final PasteAction action;
   final PastePreview preview;
   final Map<String, PickedMatch> matches;
+  final Set<String> decided;
   final void Function(String name, List<int> similarIds, List<String> similarTo)? onPick;
   final ValueChanged<String>? onUnmatch;
 
@@ -333,8 +353,10 @@ class _PastePreviewView extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final s = preview.summary;
-    final lookalikes = preview.lines.where((l) => l.newItem && l.similarTo.isNotEmpty).length;
-    final unknown = preview.skipped.where((r) => r.name != null).length;
+    final lookalikes = preview.lines
+        .where((l) => l.newItem && l.similarTo.isNotEmpty && !decided.contains(l.name))
+        .length;
+    final unknown = preview.skipped.where((r) => r.name != null && !decided.contains(r.name)).length;
     final units = preview.lines.fold<int>(0, (t, l) => t + l.quantity);
     final headline = switch (action) {
       PasteAction.receive => '$units received at ${preview.toName}',
@@ -410,7 +432,7 @@ class _PastePreviewView extends StatelessWidget {
                 ListTile(
                   dense: true,
                   title: Text('Line ${r.row}: ${r.item}'),
-                  subtitle: Text(r.reason),
+                  subtitle: Text(r.name != null && decided.contains(r.name) ? 'Left out: your choice' : r.reason),
                   trailing: r.name == null ? null : const Icon(Icons.chevron_right),
                   onTap: r.name == null || onPick == null ? null : () => onPick!(r.name!, r.similarIds, r.similarTo),
                 ),
@@ -429,8 +451,12 @@ class _PastePreviewView extends StatelessWidget {
                 subtitle: !l.newItem
                     ? null
                     : Text(
-                        l.similarTo.isEmpty ? 'New item' : 'New item. Looks like: ${l.similarTo.join(', ')}',
-                        style: l.similarTo.isEmpty ? null : TextStyle(color: theme.colorScheme.error),
+                        decided.contains(l.name) || l.similarTo.isEmpty
+                            ? (decided.contains(l.name) ? 'New item: your choice' : 'New item')
+                            : 'New item. Looks like: ${l.similarTo.join(', ')}',
+                        style: decided.contains(l.name) || l.similarTo.isEmpty
+                            ? null
+                            : TextStyle(color: theme.colorScheme.error),
                       ),
                 trailing: Text('$sign${l.quantity}', style: const TextStyle(fontWeight: FontWeight.w600)),
               ),

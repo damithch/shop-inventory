@@ -71,15 +71,43 @@ class LoaderState<T> extends State<Loader<T>> {
 }
 
 void showError(BuildContext context, Object error) {
+  final scheme = Theme.of(context).colorScheme;
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text('$error'), backgroundColor: Theme.of(context).colorScheme.error));
+    ..showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: scheme.error,
+        content: Row(
+          children: [
+            Icon(Icons.error_outline, color: scheme.onError),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('$error', style: TextStyle(color: scheme.onError)),
+            ),
+          ],
+        ),
+      ),
+    );
 }
 
+/// A short confirmation at the bottom of the screen that something worked.
 void showMessage(BuildContext context, String message) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
+    ..showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.lightGreenAccent),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+      ),
+    );
 }
 
 /// Shows the low-stock alerts a stock change just raised, if any.

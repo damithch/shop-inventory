@@ -36,6 +36,7 @@ class _BranchesScreenState extends State<BranchesScreen> {
     if (name == null || name.isEmpty || !mounted) return;
     try {
       await SessionScope.apiOf(context).addBranch(name);
+      if (mounted) showMessage(context, '$name added');
       _loader.currentState?.reload();
     } catch (e) {
       if (mounted) showError(context, e);
