@@ -41,6 +41,9 @@ class _UploadScreenState extends State<UploadScreen> {
 
   /// Sheet rows the user said are an item already in the app, by row number.
   final _matches = <int, PickedMatch>{};
+
+  /// Sheet rows the user said really are new items.
+  final _keptNew = <int>{};
   bool _busy = false;
   Object? _error;
 
@@ -69,6 +72,7 @@ class _UploadScreenState extends State<UploadScreen> {
     setState(() {
       _file = file;
       _matches.clear();
+      _keptNew.clear();
     });
     await _loadPreview();
   }
@@ -104,7 +108,21 @@ class _UploadScreenState extends State<UploadScreen> {
       similarTo: item.similarTo,
     );
     if (picked == null || !mounted) return;
-    setState(() => _matches[item.row] = picked);
+    if (picked.keepsNew) {
+      final wasMatched = _matches.containsKey(item.row);
+      setState(() {
+        _matches.remove(item.row);
+        _keptNew.add(item.row);
+      });
+      showMessage(context, '"${item.name}" will be added as a new item');
+      if (wasMatched) await _loadPreview();
+      return;
+    }
+    setState(() {
+      _keptNew.remove(item.row);
+      _matches[item.row] = picked;
+    });
+    showMessage(context, '"${item.name}" matched to ${picked.itemName}');
     await _loadPreview();
   }
 
@@ -172,6 +190,7 @@ class _UploadScreenState extends State<UploadScreen> {
             _PreviewView(
               preview: preview,
               matches: _matches,
+              keptNew: _keptNew,
               onPick: _busy ? null : _pickMatch,
               onUnmatch: _busy ? null : _unmatch,
             ),
@@ -193,16 +212,18 @@ class _UploadScreenState extends State<UploadScreen> {
 }
 
 /// Asks which item already in the app [name] (as written [where]) is: one of
-/// the suggestions, any item found by search, or none (a new item: null).
+/// the suggestions, any item found by search, or none ([PickedMatch.keepsNew]).
+/// Null when the user closes the sheet without choosing.
 Future<PickedMatch?> pickExistingItem(
   BuildContext context, {
   required String name,
   required String where,
   List<int> similarIds = const [],
   List<String> similarTo = const [],
-  String noneLabel = 'A new item',
+  String noneLabel = 'Keep as a new item',
 }) async {
   const search = -1;
+  const keepNew = -2;
   final choice = await showModalBottomSheet<int>(
     context: context,
     isScrollControlled: true,
@@ -213,7 +234,14 @@ Future<PickedMatch?> pickExistingItem(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('"$name" $where is', style: Theme.of(context).textTheme.titleMedium),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Which item is "$name" $where?', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                const Text('The app remembers your choice for next time.'),
+              ],
+            ),
           ),
           for (var i = 0; i < similarIds.length; i++)
             ListTile(
@@ -226,12 +254,17 @@ Future<PickedMatch?> pickExistingItem(
             title: const Text('Another item in the app…'),
             onTap: () => Navigator.pop(context, search),
           ),
-          ListTile(leading: const Icon(Icons.close), title: Text(noneLabel), onTap: () => Navigator.pop(context)),
+          ListTile(
+            leading: const Icon(Icons.add),
+            title: Text(noneLabel),
+            onTap: () => Navigator.pop(context, keepNew),
+          ),
         ],
       ),
     ),
   );
   if (choice == null || !context.mounted) return null;
+  if (choice == keepNew) return PickedMatch.keepNew(name);
   if (choice != search) return PickedMatch(name, similarIds[choice], similarTo[choice]);
   final found = await Navigator.push<Item>(
     context,
@@ -244,16 +277,28 @@ Future<PickedMatch?> pickExistingItem(
 class PickedMatch {
   const PickedMatch(this.sheetName, this.itemId, this.itemName);
 
+  /// The user said the name is not an item already in the app.
+  const PickedMatch.keepNew(this.sheetName) : itemId = 0, itemName = '';
+
+  bool get keepsNew => itemId == 0;
+
   final String sheetName;
   final int itemId;
   final String itemName;
 }
 
 class _PreviewView extends StatelessWidget {
-  const _PreviewView({required this.preview, required this.matches, this.onPick, this.onUnmatch});
+  const _PreviewView({
+    required this.preview,
+    required this.matches,
+    this.keptNew = const {},
+    this.onPick,
+    this.onUnmatch,
+  });
 
   final UploadPreview preview;
   final Map<int, PickedMatch> matches;
+  final Set<int> keptNew;
   final ValueChanged<UploadNewItem>? onPick;
   final ValueChanged<int>? onUnmatch;
 
@@ -263,7 +308,7 @@ class _PreviewView extends StatelessWidget {
     final theme = Theme.of(context);
     final sold = preview.changes.where((c) => c.isSale).toList();
     final received = preview.changes.where((c) => !c.isSale).toList();
-    final lookalikes = preview.newItems.where((i) => i.similarTo.isNotEmpty).toList();
+    final lookalikes = preview.newItems.where((i) => i.similarTo.isNotEmpty && !keptNew.contains(i.row)).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -351,7 +396,9 @@ class _PreviewView extends StatelessWidget {
                 dense: true,
                 onTap: onPick == null ? null : () => onPick!(i),
                 title: Text(i.name),
-                subtitle: i.similarTo.isEmpty
+                subtitle: keptNew.contains(i.row)
+                    ? const Text('New item: your choice')
+                    : i.similarTo.isEmpty
                     ? null
                     : Text('Looks like: ${i.similarTo.join(', ')}', style: TextStyle(color: theme.colorScheme.error)),
                 trailing: Text(i.stock.isEmpty ? '0' : i.stock.entries.map((e) => '${e.value} at ${e.key}').join(', ')),

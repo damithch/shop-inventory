@@ -100,6 +100,25 @@ function similarItems(name, items) {
     .map(({ id, name: itemName }) => ({ id, name: itemName }));
 }
 
+const words = (s) => String(s).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+
+// The one item whose name holds the pasted words in a row, like "Floriana"
+// for "RAYHAAN FLORIANA" or "Hawas ice" for "RASASI HAWAS ICE 100 ML". Null
+// when no item or more than one does, so the user picks.
+function containingItem(name, items) {
+  const w = words(name);
+  if (normalize(name).length < 4 || !w.length) return null;
+  const found = items.filter((i) => {
+    if (i.archived) return false;
+    const iw = words(i.name);
+    for (let start = 0; start + w.length <= iw.length; start++) {
+      if (w.every((x, k) => iw[start + k] === x)) return true;
+    }
+    return false;
+  });
+  return found.length === 1 ? found[0] : null;
+}
+
 // The location a line names, like "Dehiwela" heading a list of items to send
 // there. Allows a typo in longer names.
 function namedLocation(text, locations) {
@@ -115,8 +134,12 @@ function namedLocation(text, locations) {
 // from is where stock leaves (transfer, sale); to is where it arrives
 // (receive, transfer). Lines for the same item are added together. matches
 // maps a pasted name (normalized) to the item someone picked for it; saving
-// remembers those as aliases.
-function planPaste(action, parsed, { items, levels, aliases = [] }, { from = null, to = null, matches = new Map() } = {}) {
+// remembers those as aliases. A name found inside exactly one item's name is
+// matched to it automatically (auto_matched), unless noMatch (normalized
+// names) says it isn't that item.
+function planPaste(action, parsed, { items, levels, aliases = [] }, {
+  from = null, to = null, matches = new Map(), noMatch = new Set(),
+} = {}) {
   const byId = new Map(items.map((i) => [i.id, i]));
   const byName = new Map(items.map((i) => [normalize(i.name), i]));
   // Names picked for items on uploaded sheets or earlier pastes match too.
@@ -128,7 +151,9 @@ function planPaste(action, parsed, { items, levels, aliases = [] }, { from = nul
   for (const row of parsed.rows) {
     const key = normalize(row.name);
     const picked = matches.has(key) ? byId.get(matches.get(key)) : null;
-    const item = picked ?? byName.get(key) ?? null;
+    const known = picked ?? byName.get(key) ?? null;
+    const auto = known || noMatch.has(key) ? null : containingItem(row.name, items);
+    const item = known ?? auto;
     if (picked && normalize(picked.name) !== key && !newAliases.some((a) => normalize(a.name) === key)) {
       newAliases.push({ name: row.name, item_id: picked.id });
     }
@@ -138,8 +163,9 @@ function planPaste(action, parsed, { items, levels, aliases = [] }, { from = nul
       entry.quantity += row.quantity;
       entry.lines.push(row.line);
       if (!entry.names.includes(row.name)) entry.names.push(row.name);
+      if (!auto) entry.auto = false;
     } else {
-      merged.set(group, { item, name: row.name, names: [row.name], quantity: row.quantity, lines: [row.line] });
+      merged.set(group, { item, auto: Boolean(auto), name: row.name, names: [row.name], quantity: row.quantity, lines: [row.line] });
     }
   }
   const lines = [];
@@ -165,7 +191,7 @@ function planPaste(action, parsed, { items, levels, aliases = [] }, { from = nul
         continue;
       }
     }
-    const similar = item ? [] : similarItems(entry.name, items);
+    const similar = item && !entry.auto ? [] : similarItems(entry.name, items).filter((i) => i.id !== item?.id);
     lines.push({
       lines: entry.lines,
       name: entry.name,
@@ -174,6 +200,7 @@ function planPaste(action, parsed, { items, levels, aliases = [] }, { from = nul
       item_id: item?.id ?? null,
       item_name: item?.name ?? entry.name,
       new_item: !item,
+      auto_matched: entry.auto,
       similar_to: similar.map((i) => i.name),
       similar_ids: similar.map((i) => i.id),
     });

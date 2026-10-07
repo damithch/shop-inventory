@@ -109,30 +109,45 @@ test('a pasted sale takes stock off the shop and shows in the sales report', asy
   assert.equal((await api.post('/paste/preview', { action: 'refund', text: 'Rice 1' })).status, 400);
 });
 
-test('a bulk move list names the branch on its first line, and unknown names can be picked', async () => {
+test('a bulk move list names the branch on its first line, and short names match the one item they are part of', async () => {
   const dehiwala = (await api.post('/locations', { name: 'Dehiwala' })).body.id;
-  await api.post('/paste', { action: 'receive', text: 'PACIFIC AURA 100 ML 5\nRASASI HAWAS ICE 100 ML 4\nANGHAM 3', location_id: shopId });
+  await api.post('/paste', {
+    action: 'receive',
+    text: 'PACIFIC AURA 100 ML 5\nRASASI HAWAS ICE 100 ML 4\nANGHAM 3\nBINT HOORAN ROSE PASSION 2\nBINTH HOORAN ROSE PASSION 2',
+    location_id: shopId,
+  });
   const aura = await itemByName('PACIFIC AURA 100 ML');
-  const text = 'Dehiwela\n\nPacific aura 2\nHawas ice 2\nAngham 1\n\nTotal 5..';
+  const rose = await itemByName('BINT HOORAN ROSE PASSION');
+  const text = 'Dehiwela\n\nPacific aura 2\nHawas ice 2\nAngham 1\nRose passion 1\n\nTotal 6..';
   const body = { action: 'transfer', text, location_id: shopId };
 
   const preview = (await api.post('/paste/preview', body)).body;
   assert.equal(preview.to.location_id, dehiwala);
-  assert.deepEqual(preview.lines.map((l) => [l.item_name, l.quantity]), [['ANGHAM', 1]]);
-  assert.deepEqual(preview.skipped.map((s) => s.reason.split('.')[0]), [
-    'place name (Dehiwala)', 'not in the app', 'not in the app', 'totals row',
+  assert.deepEqual(preview.lines.map((l) => [l.item_name, l.quantity, l.auto_matched]), [
+    ['PACIFIC AURA 100 ML', 2, true], ['RASASI HAWAS ICE 100 ML', 2, true], ['ANGHAM', 1, false],
   ]);
-  assert.deepEqual(preview.skipped[1].similar_ids, [aura.id]);
+  // Two items hold "Rose passion", so the user picks one.
+  assert.deepEqual(preview.skipped.map((s) => s.reason.split('.')[0]), ['place name (Dehiwala)', 'not in the app', 'totals row']);
+  assert.equal(preview.skipped[1].similar_ids.length, 2);
 
-  const matches = { 'Pacific aura': aura.id, 'Hawas ice': (await itemByName('RASASI HAWAS ICE 100 ML')).id };
-  const saved = await api.post('/paste', { ...body, matches });
+  // An automatic match the user says is wrong is left out instead.
+  const refused = (await api.post('/paste/preview', { ...body, no_match: ['Pacific aura'] })).body;
+  assert.deepEqual(refused.lines.map((l) => l.item_name), ['RASASI HAWAS ICE 100 ML', 'ANGHAM']);
+  assert.deepEqual(refused.skipped[1].similar_ids, [aura.id]);
+  assert.equal((await api.post('/paste/preview', { ...body, no_match: 'x' })).status, 400);
+
+  const saved = await api.post('/paste', { ...body, matches: { 'Rose passion': rose.id } });
   assert.equal(saved.status, 201);
-  assert.equal(saved.body.summary.transferred, 5);
+  assert.equal(saved.body.summary.transferred, 6);
   assert.equal(await stockAt('PACIFIC AURA 100 ML', dehiwala), 2);
   assert.equal(await stockAt('RASASI HAWAS ICE 100 ML', shopId), 2);
+  assert.equal(await stockAt('BINT HOORAN ROSE PASSION', dehiwala), 1);
 
-  // Remembered: the same list matches by itself next time.
+  // The picked name is remembered, so the same list matches by itself next time.
   const again = (await api.post('/paste/preview', body)).body;
-  assert.deepEqual(again.lines.map((l) => l.item_name), ['PACIFIC AURA 100 ML', 'RASASI HAWAS ICE 100 ML', 'ANGHAM']);
+  assert.deepEqual(again.lines.map((l) => l.item_name), [
+    'PACIFIC AURA 100 ML', 'RASASI HAWAS ICE 100 ML', 'ANGHAM', 'BINT HOORAN ROSE PASSION',
+  ]);
+  assert.equal(again.lines[3].auto_matched, false);
   assert.equal((await api.post('/paste/preview', { ...body, matches: ['x'] })).status, 400);
 });

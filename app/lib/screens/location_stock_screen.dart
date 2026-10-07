@@ -52,6 +52,7 @@ class _LocationStockScreenState extends State<LocationStockScreen> {
     try {
       final updated = await SessionScope.apiOf(context).updateLocation(_location.id, name: name);
       setState(() => _location = updated);
+      if (mounted) showMessage(context, 'Renamed to ${updated.name}');
     } catch (e) {
       if (mounted) showError(context, e);
     }
@@ -72,7 +73,9 @@ class _LocationStockScreenState extends State<LocationStockScreen> {
     if (ok != true || !mounted) return;
     try {
       await SessionScope.apiOf(context).updateLocation(_location.id, archived: true);
-      if (mounted) Navigator.pop(context, true);
+      if (!mounted) return;
+      showMessage(context, '${_location.name} removed');
+      Navigator.pop(context, true);
     } catch (e) {
       if (mounted) showError(context, e);
     }

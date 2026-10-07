@@ -295,6 +295,32 @@ void main() {
     expect(find.text('2 items sold'), findsOneWidget);
   });
 
+  testWidgets('keeping a look-alike as a new item clears its warning', (tester) async {
+    pickSheet = () async => PickedSheet('home.csv', utf8.encode('Item,Qty\nRice,6\n'));
+    await pumpApp(tester);
+    await signIn(tester, 'secret');
+    await tester.tap(find.text('Sales'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add list'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Upload stock sheet'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Choose file'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1 new items look like'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Rice'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rice'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Keep as a new item'));
+    await tester.pump();
+    expect(find.text('"Rice" will be added as a new item'), findsOneWidget);
+    expect(find.text('New item: your choice'), findsOneWidget);
+    expect(find.textContaining('1 new items look like'), findsNothing);
+    expect(find.textContaining('Looks like:'), findsNothing);
+  });
+
   testWidgets('moves a list of items from the main shop to the branch it names', (tester) async {
     backend.locations.add({'id': 3, 'name': 'Galle', 'type': 'branch', 'archived': false});
     await pumpApp(tester);
@@ -304,20 +330,29 @@ void main() {
     await tester.tap(find.text('Move a list of items'));
     await tester.pumpAndSettle();
 
-    // The first line names the branch; "Rice" is a short name for Rice 5kg.
+    // The first line names the branch; "Rice" is part of only Rice 5kg's name.
     await tester.enterText(find.byType(TextField), 'Kandy\nRice 3');
     await tester.pump();
     await tester.tap(find.text('Check list'));
     await tester.pumpAndSettle();
-    expect(find.text('0 moved from Main Shop to Kandy'), findsOneWidget);
-    expect(
-      find.text(
-        '1 names aren\'t in the app. Tap each one to pick the item it is. '
-        'The app remembers it for next time.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('3 moved from Main Shop to Kandy'), findsOneWidget);
+    expect(find.textContaining('1 short names were matched'), findsOneWidget);
+    expect(find.text('Matched from "Rice". Tap to change'), findsOneWidget);
 
+    // Saying it isn't that item leaves the line out.
+    await tester.ensureVisible(find.text('Rice 5kg'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rice 5kg'));
+    await tester.pumpAndSettle();
+    expect(find.text('Which item is "Rice" in the list?'), findsOneWidget);
+    await tester.tap(find.text('Leave it out'));
+    await tester.pumpAndSettle();
+    expect(find.text('0 moved from Main Shop to Kandy'), findsOneWidget);
+    expect(find.text('Left out: your choice'), findsOneWidget);
+
+    // Picking it again makes it the user's own match, remembered on save.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Line 2: Rice 3'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Line 2: Rice 3'));
@@ -325,6 +360,7 @@ void main() {
     await tester.tap(find.text('Rice 5kg'));
     await tester.pumpAndSettle();
     expect(find.text('3 moved from Main Shop to Kandy'), findsOneWidget);
+    expect(find.text('Matched by you (1)'), findsOneWidget);
 
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();

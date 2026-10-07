@@ -137,7 +137,12 @@ class _StockActionScreenState extends State<StockActionScreen> {
       setState(() => _busy = false);
       await showStockAlerts(context, result.alerts);
       if (!mounted) return;
-      showMessage(context, 'Saved');
+      showMessage(context, switch (action) {
+        StockAction.receive => 'Added $qty',
+        StockAction.transfer => 'Moved $qty',
+        StockAction.sale => 'Sale of $qty recorded',
+        StockAction.adjust => 'Count set to $qty',
+      });
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) showError(context, e);

@@ -63,7 +63,7 @@ All endpoints except `/health` and `/auth/login` need `Authorization: Bearer <to
 | POST | `/uploads/preview` | file as the body, `?filename=&location_id=&matches=` | What a stock sheet would change; saves nothing |
 | POST | `/uploads` | same | Saves the stock sheet (see below) |
 | GET | `/uploads` | `?limit=` | Past uploads with their summary |
-| POST | `/paste/preview` | `{ action, text, location_id?, to_location_id?, matches? }` | What a pasted list would change; saves nothing |
+| POST | `/paste/preview` | `{ action, text, location_id?, to_location_id?, matches?, no_match? }` | What a pasted list would change; saves nothing |
 | POST | `/paste` | same | Saves the pasted list (see below) |
 | GET | `/reports/sales` | `?date=YYYY-MM-DD&location_id=` | What sold that day (default today), per item and location |
 
@@ -130,6 +130,11 @@ Names the app doesn't know can be matched to an item with
 `matches: { "Pacific aura": 12 }`. Saving remembers them (as for stock sheets),
 so the next list matches by itself; unknown names in `skipped` carry `name`,
 `similar_to` and `similar_ids` to pick from.
+
+A short name that is part of exactly one item's name ("Floriana" for
+`RAYHAAN FLORIANA`) matches that item by itself, with `auto_matched: true` on
+the line. If it's wrong, send the name in `no_match: ["Floriana"]` to treat it
+as unknown. When two items hold the name, it stays unknown so someone picks.
 
 Lines that can't be used change nothing and come back in `skipped` with the
 line number and why: headings, totals, no quantity, an item that isn't in the
