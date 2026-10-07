@@ -40,7 +40,6 @@ All endpoints except `/health` and `/auth/login` need `Authorization: Bearer <to
 | Method | Path | Body / query | Notes |
 |---|---|---|---|
 | POST | `/auth/login` | `{ password }` | Returns `{ token }` |
-| POST | `/auth/password` | `{ current_password, new_password }` | Changes the password (6+ characters). Returns a new `{ token }`; every other token stops working |
 | GET | `/health` | | |
 | GET | `/locations` | `?include_archived=true` | Main shop first, with item counts |
 | POST | `/locations` | `{ name }` | Adds a branch |
@@ -79,14 +78,15 @@ messages are written to be shown to the user as they are.
 
 ## Password
 
-The owner signs in with `ADMIN_PASSWORD` until the password is changed in the
-app (Settings > Change password). The new password is stored in the database
-(`settings` row `admin_password`, scrypt-hashed) and from then on
-`ADMIN_PASSWORD` no longer works. Changing it signs out every other phone
-within about 30 seconds.
+The owner signs in with `ADMIN_PASSWORD`. The app has no option to change it;
+change it on Vercel (Environment Variables, then Redeploy).
 
-If the password is forgotten, run this in Supabase's SQL editor, and
-`ADMIN_PASSWORD` works again:
+A short-lived version of the app could change the password in the app, which
+stored it in the database (`settings` row `admin_password`, scrypt-hashed).
+If that row exists, its password is the one that works and `ADMIN_PASSWORD`
+does not.
+
+To go back to `ADMIN_PASSWORD`, run this in Supabase's SQL editor:
 
 ```sql
 DELETE FROM settings WHERE key = 'admin_password';

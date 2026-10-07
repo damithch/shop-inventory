@@ -88,12 +88,6 @@ class FakeBackend {
     }
     if (req.headers['Authorization'] != 'Bearer $token') return _error(401, 'Sign in required');
 
-    if (req.method == 'POST' && path == '/auth/password') {
-      if (body['current_password'] != password) return _error(400, 'The current password is wrong');
-      password = body['new_password'] as String;
-      token = '${token}2';
-      return _json({'token': token, 'expires_in': '30d'});
-    }
     if (req.method == 'GET' && path == '/reports/sales/pdf') {
       final q = req.url.queryParameters;
       pdfs.add(q);

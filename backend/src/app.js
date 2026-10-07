@@ -1,5 +1,5 @@
 const express = require('express');
-const { login, changePassword, requireAuth } = require('./auth');
+const { login, requireAuth } = require('./auth');
 const { HttpError } = require('./errors');
 const config = require('./config');
 const { setNotifier } = require('./services/notifier');
@@ -21,7 +21,6 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 app.post('/auth/login', login);
 
 app.use(requireAuth);
-app.post('/auth/password', changePassword);
 app.use('/locations', require('./routes/locations'));
 app.use('/items', require('./routes/items'));
 app.use('/stock', require('./routes/stock'));

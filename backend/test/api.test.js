@@ -1,8 +1,10 @@
+const crypto = require('crypto');
 const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
 const ExcelJS = require('exceljs');
 const { app, db, reset, client, sent } = require('./helpers');
+const { forgetCachedPassword } = require('../src/auth');
 
 let api;
 let mainId;
@@ -233,30 +235,25 @@ test('exports all locations, and the item list, as Excel or CSV', async () => {
   assert.equal((await api.get('/exports/stock?location_id=999')).status, 404);
 });
 
-test('changing the password signs out other phones and keeps this one signed in', async () => {
-  const other = await api.get('/items');
-  assert.equal(other.status, 200);
+test('a password stored in the database replaces the environment one', async () => {
+  // There is no way to change the password from the app; this is the row an
+  // earlier version of the app wrote.
+  assert.equal((await api.post('/auth/password', { current_password: 'test-password', new_password: 'x123456' })).status, 404);
 
-  const wrong = await api.post('/auth/password', { current_password: 'nope', new_password: 'new-secret' });
-  assert.equal(wrong.status, 400);
-  assert.equal(wrong.body.error, 'The current password is wrong');
-  const short = await api.post('/auth/password', { current_password: 'test-password', new_password: 'abc' });
-  assert.equal(short.status, 400);
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync('new-secret', Buffer.from(salt, 'hex'), 32).toString('hex');
+  await db.query("INSERT INTO settings (key, value) VALUES ('admin_password', $1)", [`scrypt$${salt}$${hash}`]);
+  forgetCachedPassword();
 
-  const res = await api.post('/auth/password', { current_password: 'test-password', new_password: 'new-secret' });
-  assert.equal(res.status, 200);
-  const fresh = { Authorization: `Bearer ${res.body.token}` };
-  assert.equal((await request(app).get('/items').set(fresh)).status, 200);
-
-  // The old token, and the old password, no longer work.
   const old = await api.get('/items');
   assert.equal(old.status, 401);
   assert.equal(old.body.error, 'The password was changed, sign in again');
   assert.equal((await request(app).post('/auth/login').send({ password: 'test-password' })).status, 401);
   const login = await request(app).post('/auth/login').send({ password: 'new-secret' });
   assert.equal(login.status, 200);
-  assert.equal((await request(app).get('/items').set('Authorization', `Bearer ${login.body.token}`)).status, 200);
+  const auth = { Authorization: `Bearer ${login.body.token}` };
+  assert.equal((await request(app).get('/items').set(auth)).status, 200);
 
   // The stored password never shows up in settings.
-  assert.deepEqual((await request(app).get('/settings').set(fresh)).body, { default_threshold: 3 });
+  assert.deepEqual((await request(app).get('/settings').set(auth)).body, { default_threshold: 3 });
 });

@@ -3,18 +3,17 @@ const { promisify } = require('util');
 const jwt = require('jsonwebtoken');
 const config = require('./config');
 const db = require('./db');
-const { HttpError, badRequest } = require('./errors');
+const { HttpError } = require('./errors');
 
 const scrypt = promisify(crypto.scrypt);
-const MIN_PASSWORD_LENGTH = 6;
 
-// The owner's password lives in settings as "admin_password" once it has been
-// changed in the app. Until then ADMIN_PASSWORD from the environment is the
-// password. Deleting that settings row brings the environment password back.
+// The password is ADMIN_PASSWORD from the environment, unless settings has an
+// "admin_password" row (scrypt-hashed). The app no longer changes it, but a
+// row saved by an earlier version keeps working; deleting the row brings the
+// environment password back.
 //
 // Tokens carry the password's version ("pv"): the stored hash's salt, or
-// "env". Changing the password signs out every phone except the one that
-// changed it, which gets a new token.
+// "env", so a token from the other password is refused.
 
 // Each instance remembers the stored password briefly, so most requests skip
 // the database. A change made on another instance is seen within this time.
@@ -62,28 +61,6 @@ async function login(req, res) {
   res.json({ token: issueToken(version), expires_in: config.tokenTtl });
 }
 
-async function changePassword(req, res) {
-  const current = req.body?.current_password;
-  const next = req.body?.new_password;
-  if (typeof current !== 'string' || !current) throw badRequest('Enter your current password');
-  if (typeof next !== 'string' || next.length < MIN_PASSWORD_LENGTH) {
-    throw badRequest(`The new password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-  }
-  cached = null;
-  if (!(await checkPassword(current))) throw badRequest('The current password is wrong');
-  if (next === current) throw badRequest('The new password is the same as the current one');
-
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = (await hashPassword(next, salt)).toString('hex');
-  await db.query(
-    `INSERT INTO settings (key, value) VALUES ('admin_password', $1)
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-    [`scrypt$${salt}$${hash}`],
-  );
-  cached = null;
-  res.json({ token: issueToken(salt), expires_in: config.tokenTtl });
-}
-
 async function requireAuth(req, res, next) {
   const header = req.get('authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -104,4 +81,4 @@ function forgetCachedPassword() {
   cached = null;
 }
 
-module.exports = { login, changePassword, requireAuth, checkPassword, forgetCachedPassword };
+module.exports = { login, requireAuth, checkPassword, forgetCachedPassword };

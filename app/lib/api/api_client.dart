@@ -117,13 +117,6 @@ class ApiClient {
     return res['token'] as String;
   }
 
-  /// Changes the sign-in password. Other phones are signed out; returns the
-  /// new token for this one.
-  Future<String> changePassword({required String current, required String next}) async {
-    final res = await _send('POST', '/auth/password', body: {'current_password': current, 'new_password': next});
-    return res['token'] as String;
-  }
-
   // Locations
 
   Future<List<Location>> locations() async {
