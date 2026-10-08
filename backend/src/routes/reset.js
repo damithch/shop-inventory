@@ -2,6 +2,7 @@ const { Router } = require('express');
 const db = require('../db');
 const config = require('../config');
 const { checkPassword } = require('../auth');
+const { stockExport } = require('./exports');
 const { HttpError, badRequest, notFound, positiveInt } = require('../errors');
 
 const router = Router();
@@ -88,6 +89,10 @@ async function archiveItems(client, itemIds) {
 }
 
 // Every count at one location (location_id), or at every location, to zero.
+// The Excel backup the app saves before a reset: the same file as the stock
+// export (?location_id= for one place), available even when exports are off.
+router.get('/backup', (req, res) => stockExport(req, res, 'xlsx'));
+
 router.post('/stock', guarded(async (client, body) => {
   if (body.location_id === undefined || body.location_id === null) {
     return { ...(await zeroStock(client, {})), location: null };

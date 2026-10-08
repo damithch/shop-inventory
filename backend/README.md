@@ -99,6 +99,16 @@ DELETE FROM settings WHERE key = 'admin_password';
 (default) or `csv`; CSV files start with a byte order mark so Excel reads
 non-English letters correctly. Archived items and locations are left out.
 
+**Exports are off unless `EXPORTS_ENABLED` is `true`** on Vercel. While off,
+both endpoints answer `403 Export is turned off`, `GET /settings` says
+`exports_enabled: false` and the app hides Settings > Export. To turn it on,
+add `EXPORTS_ENABLED` = `true` under Environment Variables and Redeploy; to
+turn it off again, delete it (or set `false`) and Redeploy. The Excel backup
+saved before a reset comes from `GET /reset/backup?location_id=` (the same
+file as `/exports/stock` in Excel) and works either way; app versions from
+before this switch use `/exports/stock` for that backup, so their resets are
+refused while exports are off.
+
 - One location: item name, SKU, unit, `Qty`, alert level and a "Yes" when
   low. These columns read back as a stock sheet, so a counted copy can be
   uploaded for that location.
@@ -325,6 +335,8 @@ the whole thing can be handed over to the client.
    - `FIREBASE_SERVICE_ACCOUNT` (optional, for push notifications): the
      whole Firebase service account key file, see
      [docs/push-and-apk.md](../docs/push-and-apk.md)
+   - `EXPORTS_ENABLED` (optional): `true` turns on Export to Excel/CSV in
+     the app; leave it out to keep it off (see Exports above)
 5. Click **Deploy**. When it finishes, open
    `https://<your-project>.vercel.app/health`. It should show `{"ok":true}`.
    That URL is what the mobile app points at.
