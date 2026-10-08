@@ -14,7 +14,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _loader = GlobalKey<LoaderState<int>>();
+  final _loader = GlobalKey<LoaderState<({int defaultThreshold, bool exportsEnabled})>>();
 
   Future<void> _editDefault(int current) async {
     final value = await askNumber(
@@ -40,17 +40,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final session = SessionScope.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: Loader<int>(
+      body: Loader<({int defaultThreshold, bool exportsEnabled})>(
         key: _loader,
-        load: () => session.api.defaultThreshold(),
-        builder: (context, threshold, _) => ListView(
+        load: () => session.api.settings(),
+        builder: (context, settings, _) => ListView(
           children: [
             ListTile(
               leading: const Icon(Icons.notifications_active_outlined),
               title: const Text('Default alert level'),
-              subtitle: Text('Warn when $threshold or fewer are left'),
+              subtitle: Text('Warn when ${settings.defaultThreshold} or fewer are left'),
               trailing: const Icon(Icons.edit_outlined),
-              onTap: () => _editDefault(threshold),
+              onTap: () => _editDefault(settings.defaultThreshold),
             ),
             ListTile(
               leading: const Icon(Icons.history),
@@ -58,13 +58,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AlertHistoryScreen())),
             ),
-            ListTile(
-              leading: const Icon(Icons.file_download_outlined),
-              title: const Text('Export to Excel or CSV'),
-              subtitle: const Text('Stock at each place, or the item list'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExportScreen())),
-            ),
+            // Hidden when Export is turned off at the server (EXPORTS_ENABLED).
+            if (settings.exportsEnabled)
+              ListTile(
+                leading: const Icon(Icons.file_download_outlined),
+                title: const Text('Export to Excel or CSV'),
+                subtitle: const Text('Stock at each place, or the item list'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExportScreen())),
+              ),
             ListTile(
               leading: const Icon(Icons.restart_alt),
               title: const Text('Reset and delete'),

@@ -2,7 +2,7 @@ const { Router } = require('express');
 const ExcelJS = require('exceljs');
 const db = require('../db');
 const config = require('../config');
-const { badRequest, notFound, positiveInt } = require('../errors');
+const { HttpError, badRequest, notFound, positiveInt } = require('../errors');
 const { getDefaultThreshold } = require('../services/stock');
 
 const router = Router();
@@ -122,10 +122,17 @@ async function activeLocations() {
   return rows;
 }
 
+// Exports can be switched off with EXPORTS_ENABLED (see config.js). The
+// backup the app saves before a reset uses stockExport through /reset/backup,
+// so it keeps working either way.
+router.use((req, res, next) => {
+  if (!config.exportsEnabled) throw new HttpError(403, 'Export is turned off');
+  next();
+});
+
 // ?location_id= for one location; without it, every location: in Excel a
 // summary sheet plus a sheet per location, in CSV the summary.
-router.get('/stock', async (req, res) => {
-  const format = readFormat(req.query);
+async function stockExport(req, res, format) {
   const date = await today();
   const defaultThreshold = await getDefaultThreshold();
   if (req.query.location_id) {
@@ -141,7 +148,9 @@ router.get('/stock', async (req, res) => {
     for (const location of locations) tables.push(await locationTable(location, defaultThreshold));
   }
   await send(res, format, `stock-all-locations-${date}`, tables);
-});
+}
+
+router.get('/stock', (req, res) => stockExport(req, res, readFormat(req.query)));
 
 // The item list: name, SKU, unit, total stock and when it was added.
 router.get('/items', async (req, res) => {
@@ -171,4 +180,4 @@ router.get('/items', async (req, res) => {
   ]);
 });
 
-module.exports = router;
+module.exports = { router, stockExport };

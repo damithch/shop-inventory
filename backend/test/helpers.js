@@ -4,6 +4,7 @@ process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || 'postgres://inv:inv@
 process.env.DATABASE_SSL = 'false';
 process.env.ADMIN_PASSWORD = 'test-password';
 process.env.JWT_SECRET = 'test-secret';
+process.env.EXPORTS_ENABLED = 'true';
 
 const request = require('supertest');
 const db = require('../src/db');

@@ -13,6 +13,9 @@ class FakeBackend {
   /// The token login hands out; changing the password replaces it.
   String token = 'tok';
   int defaultThreshold = 3;
+
+  /// EXPORTS_ENABLED at the server.
+  bool exportsEnabled = true;
   final requests = <String>[];
 
   final locations = <Map<String, dynamic>>[
@@ -98,8 +101,9 @@ class FakeBackend {
         headers: {'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="$name"'},
       );
     }
-    if (req.method == 'GET' && path.startsWith('/exports/')) {
-      final format = req.url.queryParameters['format'];
+    if (req.method == 'GET' && (path.startsWith('/exports/') || path == '/reset/backup')) {
+      if (path.startsWith('/exports/') && !exportsEnabled) return _error(403, 'Export is turned off');
+      final format = req.url.queryParameters['format'] ?? 'xlsx';
       final where = req.url.queryParameters['location_id'] ?? 'all';
       final name = path == '/exports/items' ? 'items.$format' : 'stock-$where.$format';
       return http.Response.bytes(
@@ -261,7 +265,9 @@ class FakeBackend {
         ],
       });
     }
-    if (req.method == 'GET' && path == '/settings') return _json({'default_threshold': defaultThreshold});
+    if (req.method == 'GET' && path == '/settings') {
+      return _json({'default_threshold': defaultThreshold, 'exports_enabled': exportsEnabled});
+    }
     if (req.method == 'PUT' && path == '/settings') {
       defaultThreshold = body['default_threshold'] as int;
       return _json({'default_threshold': defaultThreshold});

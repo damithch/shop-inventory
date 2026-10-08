@@ -263,6 +263,13 @@ class ApiClient {
 
   // Settings and alerts
 
+  /// The default alert level, and whether Export is turned on at the server.
+  /// A server from before the switch existed always allows exports.
+  Future<({int defaultThreshold, bool exportsEnabled})> settings() async {
+    final res = await _send('GET', '/settings');
+    return (defaultThreshold: asInt(res['default_threshold']), exportsEnabled: res['exports_enabled'] != false);
+  }
+
   Future<int> defaultThreshold() async {
     final res = await _send('GET', '/settings');
     return asInt(res['default_threshold']);
@@ -396,6 +403,11 @@ class ApiClient {
     'location_id': locationId?.toString(),
     'format': format.name,
   }, 'stock.${format.name}');
+
+  /// The Excel backup saved before a reset: stock at one location, or every
+  /// location when [locationId] is null. Works even when Export is turned off.
+  Future<ExportFile> backupStock({int? locationId}) =>
+      _download('/reset/backup', {'location_id': locationId?.toString()}, 'stock.xlsx');
 
   /// Every item with its total stock.
   Future<ExportFile> exportItems({required ExportFormat format}) =>

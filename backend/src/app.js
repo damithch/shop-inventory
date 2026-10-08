@@ -27,7 +27,7 @@ app.use('/stock', require('./routes/stock'));
 app.use('/uploads', require('./routes/uploads'));
 app.use('/reports', require('./routes/reports'));
 app.use('/paste', require('./routes/paste'));
-app.use('/exports', require('./routes/exports'));
+app.use('/exports', require('./routes/exports').router);
 app.use('/reset', require('./routes/reset'));
 app.use('/', require('./routes/misc'));
 

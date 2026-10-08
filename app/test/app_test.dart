@@ -497,11 +497,23 @@ void main() {
     expect(find.text('Saved items.xlsx'), findsOneWidget);
   });
 
+  testWidgets('hides Export when it is turned off at the server', (tester) async {
+    backend.exportsEnabled = false;
+    await pumpApp(tester);
+    await signIn(tester, 'secret');
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Export to Excel or CSV'), findsNothing);
+    expect(find.text('Reset and delete'), findsOneWidget);
+  });
+
   group('Reset and delete', () {
     late List<ExportFile> saved;
     late bool saveBackup;
 
     setUp(() {
+      // The backup before a reset works even with Export turned off.
+      backend.exportsEnabled = false;
       saved = [];
       saveBackup = true;
       saveExport = (file) async {
