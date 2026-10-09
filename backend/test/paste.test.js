@@ -109,6 +109,27 @@ test('a pasted sale takes stock off the shop and shows in the sales report', asy
   assert.equal((await api.post('/paste/preview', { action: 'refund', text: 'Rice 1' })).status, 400);
 });
 
+test('recording sales from a pasted list can be turned off; purchases and transfers stay on', async () => {
+  await api.post('/paste', { action: 'receive', text: 'Rice 5', location_id: shopId });
+  process.env.PASTE_SALES_ENABLED = 'false';
+  try {
+    assert.equal((await api.get('/settings')).body.paste_sales_enabled, false);
+    for (const url of ['/paste/preview', '/paste']) {
+      const res = await api.post(url, { action: 'sale', text: 'Rice 1', location_id: shopId });
+      assert.equal(res.status, 403, url);
+      assert.equal(res.body.error, 'Recording sales from a pasted list is turned off');
+    }
+    assert.equal(await stockAt('Rice', shopId), 5); // nothing was sold
+    // Purchases and transfers are unaffected.
+    assert.equal((await api.post('/paste', { action: 'receive', text: 'Rice 2' })).status, 201);
+    assert.equal((await api.post('/paste', { action: 'transfer', text: 'Rice 2', location_id: shopId, to_location_id: mainId })).status, 201);
+  } finally {
+    process.env.PASTE_SALES_ENABLED = 'true';
+  }
+  assert.equal((await api.get('/settings')).body.paste_sales_enabled, true);
+  assert.equal((await api.post('/paste', { action: 'sale', text: 'Rice 1', location_id: shopId })).status, 201);
+});
+
 test('a bulk move list names the branch on its first line, and short names match the one item they are part of', async () => {
   const dehiwala = (await api.post('/locations', { name: 'Dehiwala' })).body.id;
   await api.post('/paste', {

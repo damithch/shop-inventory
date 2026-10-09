@@ -5,6 +5,7 @@ process.env.DATABASE_SSL = 'false';
 process.env.ADMIN_PASSWORD = 'test-password';
 process.env.JWT_SECRET = 'test-secret';
 process.env.EXPORTS_ENABLED = 'true';
+process.env.PASTE_SALES_ENABLED = 'true';
 
 const request = require('supertest');
 const db = require('../src/db');

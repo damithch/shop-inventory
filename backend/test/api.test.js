@@ -279,5 +279,5 @@ test('a password stored in the database replaces the environment one', async () 
   assert.equal((await request(app).get('/items').set(auth)).status, 200);
 
   // The stored password never shows up in settings.
-  assert.deepEqual((await request(app).get('/settings').set(auth)).body, { default_threshold: 3, exports_enabled: true });
+  assert.deepEqual((await request(app).get('/settings').set(auth)).body, { default_threshold: 3, exports_enabled: true, paste_sales_enabled: true });
 });

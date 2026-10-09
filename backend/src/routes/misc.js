@@ -8,7 +8,11 @@ const router = Router();
 router.get('/settings', async (req, res) => {
   const { rows } = await db.query('SELECT key, value FROM settings');
   const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-  res.json({ default_threshold: Number(settings.default_threshold ?? 3), exports_enabled: config.exportsEnabled });
+  res.json({
+    default_threshold: Number(settings.default_threshold ?? 3),
+    exports_enabled: config.exportsEnabled,
+    paste_sales_enabled: config.pasteSalesEnabled,
+  });
 });
 
 // Changes the alert level used wherever no per-item level has been set.

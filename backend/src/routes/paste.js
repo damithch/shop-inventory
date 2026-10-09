@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
-const { badRequest, positiveInt, optionalPrice } = require('../errors');
+const config = require('../config');
+const { HttpError, badRequest, positiveInt, optionalPrice } = require('../errors');
 const { notifyLowStock } = require('../services/notifier');
 const { loadContext } = require('../import/items');
 const { normalize } = require('../import/items');
@@ -20,6 +21,11 @@ const LABELS = { receive: 'Pasted purchase', transfer: 'Pasted transfer', sale: 
 async function plan(body = {}) {
   const { action, text } = body;
   if (!ACTIONS.includes(action)) throw badRequest(`action must be one of ${ACTIONS.join(', ')}`);
+  // Recording sales from a pasted list can be switched off (see config.js);
+  // purchases and transfers are unaffected.
+  if (action === 'sale' && !config.pasteSalesEnabled) {
+    throw new HttpError(403, 'Recording sales from a pasted list is turned off');
+  }
   if (typeof text !== 'string' || !text.trim()) throw badRequest('Paste the list of items first');
   if (text.length > 200000) throw badRequest('The pasted list is too long');
 
