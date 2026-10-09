@@ -21,4 +21,10 @@ module.exports = {
   get exportsEnabled() {
     return process.env.EXPORTS_ENABLED === 'true';
   },
+  // Recording sales by pasting a list (e.g. WhatsApp text) is off unless
+  // PASTE_SALES_ENABLED=true; sales are entered from stock sheets instead.
+  // Pasting purchases and transfers is unaffected. Read on every request.
+  get pasteSalesEnabled() {
+    return process.env.PASTE_SALES_ENABLED === 'true';
+  },
 };

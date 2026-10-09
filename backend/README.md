@@ -187,6 +187,15 @@ would change; `/paste` saves it. `action` is one of:
   "Dehiwela" goes to Dehiwala; one wrong letter is allowed).
 - `sale`: stock is sold at `location_id`.
 
+**Recording sales from a pasted list is off unless `PASTE_SALES_ENABLED` is
+`true`** on Vercel. While off, `action: "sale"` on `/paste/preview` and
+`/paste` answers `403 Recording sales from a pasted list is turned off`, and
+`GET /settings` says `paste_sales_enabled: false`; `receive` and `transfer`
+keep working. The app's buttons stay, but tapping Check list shows that
+message. To turn it on, add `PASTE_SALES_ENABLED` = `true` under Environment
+Variables and Redeploy; to turn it off again, delete it (or set `false`) and
+Redeploy. Sales are then entered from stock sheets (see above) instead.
+
 Each line is an item and how many: `Rice 5`, `Rice - 5`, `Rice x5`,
 `5 x Rice`, `Rice 5 pcs`, or Excel cells (the first cell with letters is the
 name, the first whole number after it the quantity, so a price column further
@@ -337,6 +346,8 @@ the whole thing can be handed over to the client.
      [docs/push-and-apk.md](../docs/push-and-apk.md)
    - `EXPORTS_ENABLED` (optional): `true` turns on Export to Excel/CSV in
      the app; leave it out to keep it off (see Exports above)
+   - `PASTE_SALES_ENABLED` (optional): `true` lets sales be recorded by
+     pasting a list; leave it out to keep that off (see Lists pasted above)
 5. Click **Deploy**. When it finishes, open
    `https://<your-project>.vercel.app/health`. It should show `{"ok":true}`.
    That URL is what the mobile app points at.
