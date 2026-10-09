@@ -63,6 +63,18 @@ test('an end-of-day sales list with prices adds up the day in rupees and remembe
   assert.equal((await api.patch(`/items/${dior.id}`, { price: 'abc' })).status, 400);
 });
 
+test('a sales message with a price after each quantity reads the quantity, not the price', async () => {
+  const text = '[08/10/2026, 8:41 pm] Nimal: Today sales\n1. DIOR SAUVAGE 2 25000\n2. ARMAF CLUB x1 - 18500\nYARA = 2 @ 2,500/-\nCash 120000';
+  const preview = (await api.post('/paste/preview', { action: 'sale', text, location_id: shopId })).body;
+  assert.deepEqual(preview.lines.map((l) => [l.item_name, l.quantity]), [['DIOR SAUVAGE', 2], ['ARMAF CLUB', 1], ['YARA', 2]]);
+  assert.deepEqual(preview.skipped.map((s) => s.text), ['[08/10/2026, 8:41 pm] Nimal: Today sales', 'Cash 120000']);
+
+  // When the longer name is an item, the last number stays its quantity.
+  await api.post('/paste', { action: 'receive', text: 'CLUB 2\t10' });
+  const club = (await api.post('/paste/preview', { action: 'receive', text: 'CLUB 2 5' })).body.lines[0];
+  assert.deepEqual([club.item_name, club.quantity, club.new_item], ['CLUB 2', 5, false]);
+});
+
 test('the day report downloads as a PDF for one branch or every place, today or a past day', async () => {
   await api.post('/paste', { action: 'sale', text: 'DIOR SAUVAGE 2\nYARA 1', location_id: shopId });
   await api.post('/paste', { action: 'sale', text: 'YARA 2', location_id: otherId });
