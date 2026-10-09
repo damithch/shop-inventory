@@ -191,7 +191,9 @@ Each line is an item and how many: `Rice 5`, `Rice - 5`, `Rice x5`,
 `5 x Rice`, `Rice 5 pcs`, or Excel cells (the first cell with letters is the
 name, the first whole number after it the quantity, so a price column further
 right is ignored). Excel rows sent through WhatsApp, where the tabs become
-runs of spaces, are read the same way. WhatsApp's `[date, time] Name:` prefix and list numbers
+runs of spaces, are read the same way. A price after the quantity, as in a sales message (`Dior Sauvage 2 25000`,
+`Armaf club x1 - 18500`, `Yara = 2 @ 2,500/-`), is left out, unless the name
+with the first number (`Dior Sauvage 2`) is an item in the app. WhatsApp's `[date, time] Name:` prefix and list numbers
 like `1.` are dropped. Lines for the same item are added together.
 
 Names the app doesn't know can be matched to an item with

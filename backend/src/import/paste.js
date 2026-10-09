@@ -16,7 +16,8 @@ const toInt = (s) => (/^\d[\d,]*$/.test(s) ? Number(s.replace(/,/g, '')) : null)
 
 // Splits one pasted line into an item name and quantity, or null.
 function parseLine(raw) {
-  const text = raw.replace(WHATSAPP_PREFIX, '').trim();
+  // "18,500/-" is how prices are often written; the "/-" isn't part of anything.
+  const text = raw.replace(WHATSAPP_PREFIX, '').trim().replace(/\s*\/-$/, '');
   // Excel cells are split by tabs, or by runs of spaces once WhatsApp has
   // turned the tabs into spaces.
   const separator = text.includes('\t') ? '\t' : / {2,}/.test(text) ? / {2,}/ : null;
@@ -30,9 +31,20 @@ function parseLine(raw) {
       .find((n) => n !== null);
     return qtyCell === undefined ? { name: cells[nameAt], quantity: null } : { name: cells[nameAt], quantity: qtyCell };
   }
+  // A sales message often puts the price after the quantity: "Dior Sauvage 2 25000",
+  // "Armaf club x1 - 18500", "Hawas = 2 @ 12500", "Club de nuit 2 x 18,500/-".
+  // That reading is kept as `priced`; planPaste uses it unless the longer
+  // name ("Dior Sauvage 2") is an item.
+  const p = text.match(new RegExp(
+    `^(.*[a-z].*?)(?:\\s*[-–:=×*@]\\s*|\\s+x\\s*|\\s+)(\\d[\\d,]*)\\s*${UNIT_WORDS}?\\.?\\s*(?:[-–:=×*@/x]|\\s)\\s*(?:rs\\.?|lkr)?\\s*(\\d[\\d,]*(?:\\.\\d{1,2})?)$`, 'i',
+  ));
+  const priced = p && toInt(p[2]) > 0 && Number(p[3].replace(/,/g, '')) > toInt(p[2])
+    ? { name: p[1].replace(SERIAL, ''), quantity: toInt(p[2]), price: Number(p[3].replace(/,/g, '')) }
+    : null;
   // Plain text: "AFNAN 9AM - 2", "AFNAN 9AM x2", "AFNAN 9AM 2 pcs", or "2 x AFNAN 9AM".
   const trailing = text.match(new RegExp(`^(.*[a-z].*)(?:\\s*[-–:=×*@]\\s*|\\s+x\\s*|\\s+)(\\d[\\d,]*)\\s*${UNIT_WORDS}?\\.?$`, 'i'));
-  if (trailing) return { name: trailing[1].replace(SERIAL, ''), quantity: toInt(trailing[2]) };
+  if (trailing) return { name: trailing[1].replace(SERIAL, ''), quantity: toInt(trailing[2]), ...(priced && { priced }) };
+  if (priced) return { name: priced.name, quantity: priced.quantity };
   const leading = text.match(new RegExp(`^(\\d[\\d,]*)\\s*(?:x|×|${UNIT_WORDS})?\\s+(.*[a-z].*)$`, 'i'));
   if (leading) return { name: leading[2], quantity: toInt(leading[1]) };
   return hasLetter(text) ? { name: text, quantity: null } : null;
@@ -67,7 +79,11 @@ function parsePaste(text) {
     } else if (parsed.quantity <= 0) {
       skipped.push({ line, text: raw.trim(), reason: 'quantity is 0' });
     } else {
-      rows.push({ line, text: raw.trim(), name, quantity: parsed.quantity });
+      const priced = parsed.priced && cleanName(parsed.priced.name);
+      rows.push({
+        line, text: raw.trim(), name, quantity: parsed.quantity,
+        ...(priced && { priced: { name: priced, quantity: parsed.priced.quantity, price: parsed.priced.price } }),
+      });
     }
   });
   return { rows, skipped };
@@ -151,7 +167,13 @@ function planPaste(action, parsed, { items, levels, aliases = [] }, {
   // Group the pasted rows by the item they are (or, for unknown names, by name).
   const merged = new Map();
   const newAliases = [];
-  for (const row of parsed.rows) {
+  // "Dior Sauvage 2 25000" reads as 25000 of "Dior Sauvage 2" unless the price
+  // after the quantity is dropped; drop it unless the longer name is an item.
+  const known = (name) => matches.has(normalize(name)) || byName.has(normalize(name));
+  const rows = parsed.rows.map((row) => (row.priced && !known(row.name)
+    ? { ...row, name: row.priced.name, quantity: row.priced.quantity }
+    : row));
+  for (const row of rows) {
     const key = normalize(row.name);
     const picked = matches.has(key) ? byId.get(matches.get(key)) : null;
     const known = picked ?? byName.get(key) ?? null;
