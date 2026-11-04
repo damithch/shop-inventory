@@ -19,6 +19,13 @@ const router = Router();
 
 const RESET_NOTE = 'Reset to zero';
 
+// The whole feature can be switched off with RESET_ENABLED (see config.js).
+// The app shows this message in the confirm dialog, before any backup.
+router.use((req, res, next) => {
+  if (!config.resetEnabled) throw new HttpError(403, 'Reset and delete is turned off');
+  next();
+});
+
 class DryRun extends Error {
   constructor(summary) {
     super('dry run');

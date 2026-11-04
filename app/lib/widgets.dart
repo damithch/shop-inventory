@@ -128,7 +128,8 @@ Future<void> showStockAlerts(BuildContext context, List<StockAlert> alerts) asyn
   );
 }
 
-/// The quantity on the right of a stock row, red when at or below the alert level.
+/// The quantity on the right of a stock row, red when at or below the alert
+/// level or out of stock (0, even if the item never had stock there).
 class QuantityBadge extends StatelessWidget {
   const QuantityBadge({super.key, required this.quantity, required this.low, this.unit});
 
@@ -139,6 +140,7 @@ class QuantityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final low = this.low || quantity <= 0;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(

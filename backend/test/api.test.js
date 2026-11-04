@@ -238,6 +238,7 @@ test('exports all locations, and the item list, as Excel or CSV', async () => {
 test('exports can be turned off, and the backup before a reset still works', async () => {
   await api.post('/stock/receive', { item_id: itemId, quantity: 5 });
   process.env.EXPORTS_ENABLED = 'false';
+  process.env.RESET_ENABLED = 'true';
   try {
     assert.equal((await api.get('/settings')).body.exports_enabled, false);
     for (const url of ['/exports/stock', `/exports/stock?location_id=${mainId}&format=csv`, '/exports/items']) {
@@ -255,6 +256,7 @@ test('exports can be turned off, and the backup before a reset still works', asy
     assert.equal((await api.get('/reset/backup')).status, 200);
   } finally {
     process.env.EXPORTS_ENABLED = 'true';
+    delete process.env.RESET_ENABLED;
   }
   assert.equal((await api.get('/exports/items')).status, 200);
 });
