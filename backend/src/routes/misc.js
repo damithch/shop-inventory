@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const db = require('../db');
+const config = require('../config');
 const { nonEmptyString, nonNegativeInt, optionalString, positiveInt } = require('../errors');
 
 const router = Router();
@@ -7,7 +8,7 @@ const router = Router();
 router.get('/settings', async (req, res) => {
   const { rows } = await db.query('SELECT key, value FROM settings');
   const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-  res.json({ default_threshold: Number(settings.default_threshold ?? 3) });
+  res.json({ default_threshold: Number(settings.default_threshold ?? 3), exports_enabled: config.exportsEnabled });
 });
 
 // Changes the alert level used wherever no per-item level has been set.

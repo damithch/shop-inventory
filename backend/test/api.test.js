@@ -235,6 +235,30 @@ test('exports all locations, and the item list, as Excel or CSV', async () => {
   assert.equal((await api.get('/exports/stock?location_id=999')).status, 404);
 });
 
+test('exports can be turned off, and the backup before a reset still works', async () => {
+  await api.post('/stock/receive', { item_id: itemId, quantity: 5 });
+  process.env.EXPORTS_ENABLED = 'false';
+  try {
+    assert.equal((await api.get('/settings')).body.exports_enabled, false);
+    for (const url of ['/exports/stock', `/exports/stock?location_id=${mainId}&format=csv`, '/exports/items']) {
+      const res = await api.get(url);
+      assert.equal(res.status, 403, url);
+      assert.equal(res.body.error, 'Export is turned off');
+    }
+
+    const backup = await api.get(`/reset/backup?location_id=${mainId}`).buffer(true).parse(binary);
+    assert.equal(backup.status, 200);
+    assert.match(backup.headers['content-disposition'], /filename="stock-main-shop-\d{4}-\d{2}-\d{2}\.xlsx"/);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(backup.body);
+    assert.deepEqual(workbook.worksheets[0].getRow(2).values.slice(1, 5), ['Rice 5kg', 'RICE5', 'pcs', 5]);
+    assert.equal((await api.get('/reset/backup')).status, 200);
+  } finally {
+    process.env.EXPORTS_ENABLED = 'true';
+  }
+  assert.equal((await api.get('/exports/items')).status, 200);
+});
+
 test('a password stored in the database replaces the environment one', async () => {
   // There is no way to change the password from the app; this is the row an
   // earlier version of the app wrote.
@@ -255,5 +279,5 @@ test('a password stored in the database replaces the environment one', async () 
   assert.equal((await request(app).get('/items').set(auth)).status, 200);
 
   // The stored password never shows up in settings.
-  assert.deepEqual((await request(app).get('/settings').set(auth)).body, { default_threshold: 3 });
+  assert.deepEqual((await request(app).get('/settings').set(auth)).body, { default_threshold: 3, exports_enabled: true });
 });

@@ -38,7 +38,8 @@ Flutter app for the shop owner. It talks to the API in `../backend`.
   report for the day shown, for one place or all places.
 - **Settings**: the default alert level (3 to start), alert history,
   **Export** (stock at one place or all places, or the item list, as Excel or
-  CSV, then Share or Save to phone), sign out.
+  CSV, then Share or Save to phone; shown only when `EXPORTS_ENABLED=true`
+  on the server), sign out.
 - **Reset and delete** (in Settings): set every count to 0 at one place or
   everywhere, delete an item, every item, or a branch. Each asks you to type the
   place's name (or RESET / DELETE) and your password, saves an Excel backup of

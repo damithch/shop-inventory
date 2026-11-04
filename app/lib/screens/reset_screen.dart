@@ -54,7 +54,7 @@ class _ResetScreenState extends State<ResetScreen> {
     final api = SessionScope.apiOf(context);
     setState(() => _busy = true);
     try {
-      final backup = await api.exportStock(locationId: job.backupLocationId, format: ExportFormat.xlsx);
+      final backup = await api.backupStock(locationId: job.backupLocationId);
       if (!await saveExport(backup)) {
         if (mounted) showError(context, 'No backup was saved, so nothing was changed.');
         return;
