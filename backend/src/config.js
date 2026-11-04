@@ -16,6 +16,11 @@ module.exports = {
   timeZone: process.env.SHOP_TIMEZONE || 'Asia/Colombo',
   // Contents of the Firebase service account key file, for push notifications.
   firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT || null,
+  // Settings > Reset and delete (every /reset endpoint, the backup too) is
+  // off unless RESET_ENABLED=true. Read on every request so tests can switch it.
+  get resetEnabled() {
+    return process.env.RESET_ENABLED === 'true';
+  },
   // Export to Excel/CSV in the app is off unless EXPORTS_ENABLED=true. Read on
   // every request so tests can switch it.
   get exportsEnabled() {

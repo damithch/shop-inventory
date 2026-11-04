@@ -2,6 +2,8 @@ const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { db, reset, client, sent } = require('./helpers');
 
+process.env.RESET_ENABLED = 'true';
+
 let api;
 let mainId;
 let branchId;
@@ -127,4 +129,25 @@ test('the main shop cannot be deleted', async () => {
   const res = await api.post('/reset/delete-branch', { password, location_id: mainId });
   assert.equal(res.status, 400);
   assert.equal(await qty(rice, mainId), 12);
+});
+
+test('every reset endpoint is refused while RESET_ENABLED is off', async () => {
+  delete process.env.RESET_ENABLED;
+  try {
+    const calls = [
+      api.get('/reset/backup'),
+      api.post('/reset/stock', { password, dry_run: true }),
+      api.post('/reset/delete-item', { password, item_id: rice }),
+      api.post('/reset/delete-all-items', { password }),
+      api.post('/reset/delete-branch', { password, location_id: branchId }),
+    ];
+    for (const res of await Promise.all(calls)) {
+      assert.equal(res.status, 403);
+      assert.equal(res.body.error, 'Reset and delete is turned off');
+    }
+    assert.equal(await qty(rice, mainId), 12);
+    assert.equal((await api.get('/items')).body.length, 2);
+  } finally {
+    process.env.RESET_ENABLED = 'true';
+  }
 });

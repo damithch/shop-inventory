@@ -130,6 +130,14 @@ then runs it for real.
 | `POST /reset/delete-all-items` |                          | Every item's stock to 0, then archives them all |
 | `POST /reset/delete-branch`    | `location_id`            | The branch's stock to 0, then archives it (not the main shop) |
 
+**Reset and delete is off unless `RESET_ENABLED` is `true`** on Vercel. While
+off, every `/reset` endpoint (the four above and `GET /reset/backup`) answers
+`403 Reset and delete is turned off` and changes nothing. The app's Settings >
+Reset and delete page still opens, but the confirm dialog shows that message
+after the password is entered, before any backup is saved. To turn it on, add
+`RESET_ENABLED` = `true` under Environment Variables and Redeploy; to turn it
+off again, delete it (or set `false`) and Redeploy.
+
 Answers `{ items, units, dry_run }` (items and units taken to zero) plus
 `location`, `item` or `deleted_items`. Nothing is wiped:
 - Each count taken away is an `adjust` movement noted "Reset to zero", so
@@ -335,6 +343,8 @@ the whole thing can be handed over to the client.
    - `FIREBASE_SERVICE_ACCOUNT` (optional, for push notifications): the
      whole Firebase service account key file, see
      [docs/push-and-apk.md](../docs/push-and-apk.md)
+   - `RESET_ENABLED` (optional): `true` turns on Settings > Reset and delete
+     in the app; leave it out to keep it off (see Reset and delete above)
    - `EXPORTS_ENABLED` (optional): `true` turns on Export to Excel/CSV in
      the app; leave it out to keep it off (see Exports above)
 5. Click **Deploy**. When it finishes, open

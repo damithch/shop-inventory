@@ -187,7 +187,12 @@ test('rejects files it cannot read', async () => {
 test('after deleting every item, the same sheet brings the items back as new', async () => {
   const sheet = 'Item name,Qty\nRice,10\nSalt,3\n';
   assert.equal((await upload('/uploads', 'first.csv', sheet)).status, 201);
-  assert.equal((await api.post('/reset/delete-all-items', { password: 'test-password' })).status, 200);
+  process.env.RESET_ENABLED = 'true';
+  try {
+    assert.equal((await api.post('/reset/delete-all-items', { password: 'test-password' })).status, 200);
+  } finally {
+    delete process.env.RESET_ENABLED;
+  }
 
   const res = await upload('/uploads', 'again.csv', sheet);
   assert.equal(res.status, 201);
