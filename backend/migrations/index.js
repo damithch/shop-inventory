@@ -8,4 +8,5 @@ module.exports = [
   { name: '002_uploads.sql', sql: fs.readFileSync(path.join(__dirname, '002_uploads.sql'), 'utf8') },
   { name: '003_item_aliases.sql', sql: fs.readFileSync(path.join(__dirname, '003_item_aliases.sql'), 'utf8') },
   { name: '004_prices.sql', sql: fs.readFileSync(path.join(__dirname, '004_prices.sql'), 'utf8') },
+  { name: '005_enable_rls.sql', sql: fs.readFileSync(path.join(__dirname, '005_enable_rls.sql'), 'utf8') },
 ];
